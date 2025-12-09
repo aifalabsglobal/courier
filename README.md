@@ -1,141 +1,302 @@
-# 🚀 Welcome to Z.ai Code Scaffold
+# 🚚 Courier - Logistics ERP System
 
-A modern, production-ready web application scaffold powered by cutting-edge technologies, designed to accelerate your development with [Z.ai](https://chat.z.ai)'s AI-powered coding assistance.
+A modern, full-featured Logistics and Transportation Management System built with Next.js 15, PostgreSQL, and Prisma.
 
-## ✨ Technology Stack
+![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791?logo=postgresql)
+![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38B2AC?logo=tailwind-css)
 
-This scaffold provides a robust foundation built with:
+## 📋 Table of Contents
 
-### 🎯 Core Framework
-- **⚡ Next.js 15** - The React framework for production with App Router
-- **📘 TypeScript 5** - Type-safe JavaScript for better developer experience
-- **🎨 Tailwind CSS 4** - Utility-first CSS framework for rapid UI development
+- [Features](#-features)
+- [Tech Stack](#-tech-stack)
+- [Getting Started](#-getting-started)
+- [Project Structure](#-project-structure)
+- [Database Schema](#-database-schema)
+- [Modules](#-modules)
+- [API Reference](#-api-reference)
+- [Environment Variables](#-environment-variables)
+- [Deployment](#-deployment)
+- [Contributing](#-contributing)
 
-### 🧩 UI Components & Styling
-- **🧩 shadcn/ui** - High-quality, accessible components built on Radix UI
-- **🎯 Lucide React** - Beautiful & consistent icon library
-- **🌈 Framer Motion** - Production-ready motion library for React
-- **🎨 Next Themes** - Perfect dark mode in 2 lines of code
+## ✨ Features
 
-### 📋 Forms & Validation
-- **🎣 React Hook Form** - Performant forms with easy validation
-- **✅ Zod** - TypeScript-first schema validation
+### 📊 Dashboard
+- Real-time business metrics and KPIs
+- Revenue charts and analytics
+- Quick access to all modules
 
-### 🔄 State Management & Data Fetching
-- **🐻 Zustand** - Simple, scalable state management
-- **🔄 TanStack Query** - Powerful data synchronization for React
-- **🌐 Axios** - Promise-based HTTP client
+### 📦 Order Management
+- Create and manage transportation orders
+- Order tracking with status updates
+- Multi-stop shipment support
+- Special handling requirements
 
-### 🗄️ Database & Backend
-- **🗄️ Prisma** - Next-generation Node.js and TypeScript ORM
-- **🔐 NextAuth.js** - Complete open-source authentication solution
+### 🚛 Transportation
+- **Trip Management**: Plan and dispatch trips
+- **Route Configuration**: Define lanes with distance and transit times
+- **Live Tracking**: Real-time GPS tracking of vehicles
 
-### 🎨 Advanced UI Features
-- **📊 TanStack Table** - Headless UI for building tables and datagrids
-- **🖱️ DND Kit** - Modern drag and drop toolkit for React
-- **📊 Recharts** - Redefined chart library built with React and D3
-- **🖼️ Sharp** - High performance image processing
+### 🏭 Warehouse Management
+- **Inventory Control**: SKU-level stock management
+- **Location Management**: Zone, aisle, rack, level configurations
+- **Transaction Logging**: Complete audit trail of movements
 
-### 🌍 Internationalization & Utilities
-- **🌍 Next Intl** - Internationalization library for Next.js
-- **📅 Date-fns** - Modern JavaScript date utility library
-- **🪝 ReactUse** - Collection of essential React hooks for modern development
+### 📇 Master Data
+- **Customers**: CRM with credit limits and payment terms
+- **Vendors**: Partner and contract management
+- **Vehicles**: Fleet registration and compliance tracking
+- **Drivers**: License management and performance ratings
+- **Locations**: Multi-type location support (warehouses, ports, airports)
 
-## 🎯 Why This Scaffold?
+### 💰 Billing & Finance
+- Invoice generation and management
+- Payment tracking
+- Revenue analytics
 
-- **🏎️ Fast Development** - Pre-configured tooling and best practices
-- **🎨 Beautiful UI** - Complete shadcn/ui component library with advanced interactions
-- **🔒 Type Safety** - Full TypeScript configuration with Zod validation
-- **📱 Responsive** - Mobile-first design principles with smooth animations
-- **🗄️ Database Ready** - Prisma ORM configured for rapid backend development
-- **🔐 Auth Included** - NextAuth.js for secure authentication flows
-- **📊 Data Visualization** - Charts, tables, and drag-and-drop functionality
-- **🌍 i18n Ready** - Multi-language support with Next Intl
-- **🚀 Production Ready** - Optimized build and deployment settings
-- **🤖 AI-Friendly** - Structured codebase perfect for AI assistance
+### 🔧 Fleet Management
+- Vehicle maintenance scheduling
+- Fuel consumption tracking
+- Compliance monitoring
 
-## 🚀 Quick Start
+### 📈 Analytics
+- Business intelligence dashboards
+- Performance metrics
+- Custom reporting
 
-```bash
-# Install dependencies
-npm install
+## 🛠 Tech Stack
 
-# Start development server
-npm run dev
+| Category | Technology |
+|----------|------------|
+| **Framework** | Next.js 15 (App Router) |
+| **Language** | TypeScript 5 |
+| **Database** | PostgreSQL 17 |
+| **ORM** | Prisma 6 |
+| **Authentication** | Clerk |
+| **Styling** | Tailwind CSS 4 |
+| **UI Components** | shadcn/ui + Radix UI |
+| **State Management** | Zustand |
+| **Data Fetching** | TanStack Query |
+| **Forms** | React Hook Form + Zod |
+| **Charts** | Recharts |
 
-# Build for production
-npm run build
+## 🚀 Getting Started
 
-# Start production server
-npm start
-```
+### Prerequisites
 
-Open [http://localhost:3000](http://localhost:3000) to see your application running.
+- Node.js 18+ 
+- PostgreSQL 14+
+- npm or yarn
 
-## 🤖 Powered by Z.ai
+### Installation
 
-This scaffold is optimized for use with [Z.ai](https://chat.z.ai) - your AI assistant for:
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/aifalabsglobal/courier.git
+   cd courier
+   ```
 
-- **💻 Code Generation** - Generate components, pages, and features instantly
-- **🎨 UI Development** - Create beautiful interfaces with AI assistance  
-- **🔧 Bug Fixing** - Identify and resolve issues with intelligent suggestions
-- **📝 Documentation** - Auto-generate comprehensive documentation
-- **🚀 Optimization** - Performance improvements and best practices
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-Ready to build something amazing? Start chatting with Z.ai at [chat.z.ai](https://chat.z.ai) and experience the future of AI-powered development!
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Edit `.env` with your database credentials:
+   ```env
+   DATABASE_URL="postgresql://username:password@localhost:5432/courier"
+   ```
+
+4. **Set up the database**
+   ```bash
+   # Push schema to database
+   npm run db:push
+   
+   # Generate Prisma client
+   npm run db:generate
+   ```
+
+5. **Start development server**
+   ```bash
+   npm run dev
+   ```
+
+6. **Open in browser**
+   ```
+   http://localhost:3000
+   ```
 
 ## 📁 Project Structure
 
 ```
-src/
-├── app/                 # Next.js App Router pages
-├── components/          # Reusable React components
-│   └── ui/             # shadcn/ui components
-├── hooks/              # Custom React hooks
-└── lib/                # Utility functions and configurations
+courier/
+├── prisma/
+│   └── schema.prisma          # Database schema
+├── src/
+│   ├── app/
+│   │   ├── api/               # API routes
+│   │   ├── dashboard/         # Dashboard pages
+│   │   │   ├── analytics/     # Analytics module
+│   │   │   ├── billing/       # Billing & invoices
+│   │   │   ├── fleet/         # Fleet management
+│   │   │   ├── master-data/   # Master data (customers, vendors, etc.)
+│   │   │   ├── orders/        # Order management
+│   │   │   ├── transportation/# Transportation & trips
+│   │   │   └── warehouse/     # Warehouse & inventory
+│   │   ├── sign-in/           # Authentication
+│   │   └── sign-up/
+│   ├── components/
+│   │   └── ui/                # shadcn/ui components
+│   ├── hooks/                 # Custom React hooks
+│   └── lib/                   # Utilities
+├── public/                    # Static assets
+└── package.json
 ```
 
-## 🎨 Available Features & Components
+## 🗄 Database Schema
 
-This scaffold includes a comprehensive set of modern web development tools:
+The system uses a comprehensive schema with 30+ models:
 
-### 🧩 UI Components (shadcn/ui)
-- **Layout**: Card, Separator, Aspect Ratio, Resizable Panels
-- **Forms**: Input, Textarea, Select, Checkbox, Radio Group, Switch
-- **Feedback**: Alert, Toast (Sonner), Progress, Skeleton
-- **Navigation**: Breadcrumb, Menubar, Navigation Menu, Pagination
-- **Overlay**: Dialog, Sheet, Popover, Tooltip, Hover Card
-- **Data Display**: Badge, Avatar, Calendar
+### Core Entities
+- **Company** - Multi-tenant organization
+- **Branch** - Company locations
+- **CompanyUser** - User-company associations with roles
 
-### 📊 Advanced Data Features
-- **Tables**: Powerful data tables with sorting, filtering, pagination (TanStack Table)
-- **Charts**: Beautiful visualizations with Recharts
-- **Forms**: Type-safe forms with React Hook Form + Zod validation
+### Master Data
+- **Customer** - Customer accounts
+- **Vendor** - Transportation partners
+- **Vehicle** - Fleet vehicles
+- **VehicleType** - Vehicle classifications
+- **Driver** - Driver profiles
+- **Location** - Geographic locations
+- **Route** - Transportation lanes
 
-### 🎨 Interactive Features
-- **Animations**: Smooth micro-interactions with Framer Motion
-- **Drag & Drop**: Modern drag-and-drop functionality with DND Kit
-- **Theme Switching**: Built-in dark/light mode support
+### Operations
+- **Order** - Transportation orders
+- **OrderItem** - Order line items
+- **Trip** - Planned/active trips
+- **TrackingEvent** - GPS/status updates
 
-### 🔐 Backend Integration
-- **Authentication**: Ready-to-use auth flows with NextAuth.js
-- **Database**: Type-safe database operations with Prisma
-- **API Client**: HTTP requests with Axios + TanStack Query
-- **State Management**: Simple and scalable with Zustand
+### Warehouse
+- **Warehouse** - Storage facilities
+- **WarehouseLocation** - Bin/slot locations
+- **SKU** - Stock keeping units
+- **Inventory** - Stock levels
+- **InventoryTransaction** - Stock movements
 
-### 🌍 Production Features
-- **Internationalization**: Multi-language support with Next Intl
-- **Image Optimization**: Automatic image processing with Sharp
-- **Type Safety**: End-to-end TypeScript with Zod validation
-- **Essential Hooks**: 100+ useful React hooks with ReactUse for common patterns
+### Finance
+- **Tariff** - Pricing structures
+- **TariffSlab** - Rate slabs
+- **Invoice** - Customer invoices
+- **InvoiceLine** - Invoice details
 
-## 🤝 Get Started with Z.ai
+### Fleet
+- **VehicleMaintenance** - Service records
+- **FuelEntry** - Fuel consumption
 
-1. **Clone this scaffold** to jumpstart your project
-2. **Visit [chat.z.ai](https://chat.z.ai)** to access your AI coding assistant
-3. **Start building** with intelligent code generation and assistance
-4. **Deploy with confidence** using the production-ready setup
+## 📱 Modules
+
+### Dashboard (`/dashboard`)
+Main overview with KPIs, charts, and quick actions.
+
+### Master Data (`/dashboard/master-data`)
+| Page | Route | Description |
+|------|-------|-------------|
+| Overview | `/master-data` | Links to all master data |
+| Customers | `/master-data/customers` | Customer CRUD |
+| Vendors | `/master-data/vendors` | Vendor management |
+| Vehicles | `/master-data/vehicles` | Fleet vehicles |
+| Drivers | `/master-data/drivers` | Driver profiles |
+| Locations | `/master-data/locations` | Location registry |
+
+### Orders (`/dashboard/orders`)
+Complete order lifecycle management.
+
+### Transportation (`/dashboard/transportation`)
+| Page | Route | Description |
+|------|-------|-------------|
+| Overview | `/transportation` | Trip summary |
+| Trips | `/transportation/trips` | Trip management |
+| Routes | `/transportation/routes` | Lane configuration |
+| Tracking | `/transportation/tracking` | Live tracking |
+
+### Warehouse (`/dashboard/warehouse`)
+| Page | Route | Description |
+|------|-------|-------------|
+| Overview | `/warehouse` | Inventory summary |
+| Inventory | `/warehouse/inventory` | Stock levels |
+| Locations | `/warehouse/locations` | Bin management |
+| Transactions | `/warehouse/transactions` | Movement log |
+
+### Billing (`/dashboard/billing`)
+| Page | Route | Description |
+|------|-------|-------------|
+| Overview | `/billing` | Financial summary |
+| Invoices | `/billing/invoices` | Invoice management |
+
+### Fleet (`/dashboard/fleet`)
+| Page | Route | Description |
+|------|-------|-------------|
+| Overview | `/fleet` | Fleet summary |
+| Maintenance | `/fleet/maintenance` | Service scheduling |
+
+### Analytics (`/dashboard/analytics`)
+Business intelligence and reporting.
+
+## 🔐 Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | PostgreSQL connection string | ✅ |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk public key | ✅ |
+| `CLERK_SECRET_KEY` | Clerk secret key | ✅ |
+
+Example `.env`:
+```env
+DATABASE_URL="postgresql://postgres:password@localhost:5432/courier"
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_xxx
+CLERK_SECRET_KEY=sk_test_xxx
+```
+
+## 🚀 Deployment
+
+### Database Commands
+```bash
+npm run db:push      # Push schema to database
+npm run db:generate  # Generate Prisma client
+npm run db:migrate   # Run migrations (production)
+npm run db:reset     # Reset database (development)
+```
+
+### Build for Production
+```bash
+npm run build
+npm start
+```
+
+### Docker (Coming Soon)
+```bash
+docker-compose up -d
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is proprietary software owned by AIFA Labs Global.
 
 ---
 
-Built with ❤️ for the developer community. Supercharged by [Z.ai](https://chat.z.ai) 🚀
+Built with ❤️ by [AIFA Labs Global](https://github.com/aifalabsglobal)
