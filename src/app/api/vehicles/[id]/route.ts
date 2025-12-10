@@ -1,0 +1,98 @@
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { auth } from "@clerk/nextjs/server";
+
+export async function PUT(
+    req: Request,
+    { params }: { params: { id: string } }
+) {
+    try {
+        const { userId } = await auth();
+        if (!userId) {
+            return new NextResponse("Unauthorized", { status: 401 });
+        }
+
+        const body = await req.json();
+        const {
+            registration,
+            make,
+            model,
+            type, // receiving type name/string
+            status,
+            capacityWeight,
+            capacityVolume,
+            fitnessExpiry,
+            insuranceExpiry,
+            vehicleTypeId // Optional direct update if frontend sends it
+        } = body;
+
+        // Resolve vehicleType if provided as string name (similar to POST)
+        let finalVehicleTypeId = vehicleTypeId;
+
+        if (!vehicleTypeId && type) {
+            // Try to find the type by name
+            let vehicleType = await db.vehicleType.findFirst({
+                where: { name: type }
+            });
+
+            if (!vehicleType) {
+                // For MVP, if update tries to set a new type that doesn't exist, create it?
+                // Or just fail. Let's reuse creation logic for robustness.
+                vehicleType = await db.vehicleType.create({
+                    data: {
+                        name: type,
+                        code: type.toUpperCase().replace(/\s+/g, '_'),
+                        description: "Auto-generated",
+                        companyId: "default-company-id"
+                    }
+                }).catch(() => null);
+            }
+            finalVehicleTypeId = vehicleType?.id;
+        }
+
+        // Prepare update data, excluding undefined fields
+        const updateData: any = {
+            registration,
+            make,
+            model,
+            status,
+            fitnessExpiry: fitnessExpiry ? new Date(fitnessExpiry) : undefined,
+            insuranceExpiry: insuranceExpiry ? new Date(insuranceExpiry) : undefined,
+        };
+
+        if (finalVehicleTypeId) {
+            updateData.vehicleTypeId = finalVehicleTypeId;
+        }
+
+        const vehicle = await db.vehicle.update({
+            where: { id: params.id },
+            data: updateData
+        });
+
+        return NextResponse.json(vehicle);
+    } catch (error) {
+        console.error("[VEHICLE_PATCH]", error);
+        return new NextResponse("Internal Error", { status: 500 });
+    }
+}
+
+export async function DELETE(
+    req: Request,
+    { params }: { params: { id: string } }
+) {
+    try {
+        const { userId } = await auth();
+        if (!userId) {
+            return new NextResponse("Unauthorized", { status: 401 });
+        }
+
+        const vehicle = await db.vehicle.delete({
+            where: { id: params.id }
+        });
+
+        return NextResponse.json(vehicle);
+    } catch (error) {
+        console.error("[VEHICLE_DELETE]", error);
+        return new NextResponse("Internal Error", { status: 500 });
+    }
+}

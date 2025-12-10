@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -40,59 +39,27 @@ interface Customer {
   id: string;
   code: string;
   name: string;
-  email: string;
-  phone: string;
-  city: string;
-  country: string;
-  creditLimit: number;
-  paymentTerms: string;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  address: string | null;
   isActive: boolean;
+  // creditLimit and paymentTerms are removed from this basic version or need schema update
+  // The current schema does not have creditLimit/paymentTerms for Customer (checked previously)
+  // Wait, I should double check schema for Customer.
+  // The schema has: name, email, phone, address, city, state, country, code, isActive
+  // No creditLimit or paymentTerms in the standard schema I viewed earlier.
+  // I will stick to what's in the DB schema to avoid errors.
 }
-
-const mockCustomers: Customer[] = [
-  {
-    id: "1",
-    code: "CUST001",
-    name: "Acme Corporation",
-    email: "contact@acme.com",
-    phone: "+1-555-0101",
-    city: "New York",
-    country: "USA",
-    creditLimit: 50000,
-    paymentTerms: "NET30",
-    isActive: true,
-  },
-  {
-    id: "2",
-    code: "CUST002",
-    name: "Global Logistics",
-    email: "info@globallogistics.com",
-    phone: "+1-555-0102",
-    city: "Los Angeles",
-    country: "USA",
-    creditLimit: 75000,
-    paymentTerms: "NET15",
-    isActive: true,
-  },
-  {
-    id: "3",
-    code: "CUST003",
-    name: "Fast Shipping Co",
-    email: "hello@fastshipping.com",
-    phone: "+1-555-0103",
-    city: "Chicago",
-    country: "USA",
-    creditLimit: 30000,
-    paymentTerms: "NET45",
-    isActive: false,
-  },
-];
 
 export default function CustomersPage() {
   const { toast } = useToast();
-  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -108,48 +75,82 @@ export default function CustomersPage() {
     name: "",
     email: "",
     phone: "",
+    address: "",
     city: "",
-    country: "",
-    creditLimit: 0,
-    paymentTerms: "NET30",
+    state: "",
+    country: "USA",
     isActive: true
   });
+
+  const fetchCustomers = async () => {
+    try {
+      const res = await fetch("/api/customers");
+      if (!res.ok) throw new Error("Failed to fetch customers");
+      const data = await res.json();
+      setCustomers(data);
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to load customers", variant: "destructive" });
+    } finally {
+      setIsPageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
 
   const filteredCustomers = customers.filter(
     (c) =>
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchTerm.toLowerCase())
+      (c.code && c.code.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const resetForm = () => {
     setFormData({
-      code: `CUST${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+      code: "",
       name: "",
       email: "",
       phone: "",
+      address: "",
       city: "",
+      state: "",
       country: "USA",
-      creditLimit: 10000,
-      paymentTerms: "NET30",
       isActive: true
     });
   };
 
   const handleCreate = async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          country: formData.country,
+          status: formData.isActive ? "Active" : "Inactive"
+        }),
+      });
 
-    const newCustomer: Customer = {
-      id: Date.now().toString(),
-      ...formData,
-    };
+      if (!res.ok) throw new Error("Failed to create customer");
 
-    setCustomers([...customers, newCustomer]);
-    setIsCreateDialogOpen(false);
-    resetForm();
-    setIsLoading(false);
-    toast({ title: "Customer Added", description: `${formData.name} has been added successfully.` });
+      await fetchCustomers();
+      setIsCreateDialogOpen(false);
+      resetForm();
+      toast({ title: "Customer Added", description: `${formData.name} has been added successfully.` });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to create customer", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEdit = (customer: Customer) => {
@@ -157,12 +158,12 @@ export default function CustomersPage() {
     setFormData({
       code: customer.code,
       name: customer.name,
-      email: customer.email,
-      phone: customer.phone,
-      city: customer.city,
-      country: customer.country,
-      creditLimit: customer.creditLimit,
-      paymentTerms: customer.paymentTerms,
+      email: customer.email || "",
+      phone: customer.phone || "",
+      address: customer.address || "",
+      city: customer.city || "",
+      state: customer.state || "",
+      country: customer.country || "",
       isActive: customer.isActive
     });
     setIsEditDialogOpen(true);
@@ -171,17 +172,34 @@ export default function CustomersPage() {
   const handleUpdate = async () => {
     if (!selectedCustomer) return;
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const res = await fetch(`/api/customers/${selectedCustomer.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          country: formData.country,
+          status: formData.isActive ? "Active" : "Inactive"
+        }),
+      });
 
-    setCustomers(customers.map(c =>
-      c.id === selectedCustomer.id
-        ? { ...c, ...formData }
-        : c
-    ));
-    setIsEditDialogOpen(false);
-    setSelectedCustomer(null);
-    setIsLoading(false);
-    toast({ title: "Customer Updated", description: `${formData.name} has been updated successfully.` });
+      if (!res.ok) throw new Error("Failed to update customer");
+
+      await fetchCustomers();
+      setIsEditDialogOpen(false);
+      setSelectedCustomer(null);
+      toast({ title: "Customer Updated", description: `${formData.name} has been updated successfully.` });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to update customer", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleView = (customer: Customer) => {
@@ -197,19 +215,28 @@ export default function CustomersPage() {
   const handleDeleteConfirm = async () => {
     if (!selectedCustomer) return;
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const res = await fetch(`/api/customers/${selectedCustomer.id}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Failed to delete customer");
 
-    setCustomers(customers.filter(c => c.id !== selectedCustomer.id));
-    setIsDeleteDialogOpen(false);
-    setSelectedCustomer(null);
-    setIsLoading(false);
-    toast({ title: "Customer Deleted", description: "Customer has been removed.", variant: "destructive" });
+      await fetchCustomers();
+      setIsDeleteDialogOpen(false);
+      setSelectedCustomer(null);
+      toast({ title: "Customer Deleted", description: "Customer has been removed.", variant: "destructive" });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to delete customer", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const stats = {
     total: customers.length,
     active: customers.filter(c => c.isActive).length,
-    totalCredit: customers.reduce((sum, c) => sum + c.creditLimit, 0)
+    // Removed credit limit stats as it's not in schema
   };
 
   const CustomerForm = () => (
@@ -220,6 +247,8 @@ export default function CustomersPage() {
           value={formData.code}
           onChange={(e) => setFormData({ ...formData, code: e.target.value })}
           className="col-span-3"
+          placeholder="Auto-generated"
+          disabled
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
@@ -247,6 +276,14 @@ export default function CustomersPage() {
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Address</Label>
+        <Input
+          value={formData.address}
+          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">City</Label>
         <Input
           value={formData.city}
@@ -255,28 +292,20 @@ export default function CustomersPage() {
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
-        <Label className="text-right">Credit Limit</Label>
+        <Label className="text-right">State</Label>
         <Input
-          type="number"
-          value={formData.creditLimit}
-          onChange={(e) => setFormData({ ...formData, creditLimit: parseInt(e.target.value) || 0 })}
+          value={formData.state}
+          onChange={(e) => setFormData({ ...formData, state: e.target.value })}
           className="col-span-3"
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
-        <Label className="text-right">Terms</Label>
-        <div className="col-span-3">
-          <select
-            className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-            value={formData.paymentTerms}
-            onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
-          >
-            <option value="NET15">NET15</option>
-            <option value="NET30">NET30</option>
-            <option value="NET45">NET45</option>
-            <option value="NET60">NET60</option>
-          </select>
-        </div>
+        <Label className="text-right">Country</Label>
+        <Input
+          value={formData.country}
+          onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+          className="col-span-3"
+        />
       </div>
     </div>
   );
@@ -293,7 +322,7 @@ export default function CustomersPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
@@ -307,13 +336,6 @@ export default function CustomersPage() {
             <Building className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent><div className="text-2xl font-bold text-green-600">{stats.active}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Credit Limit</CardTitle>
-            <Building className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold text-blue-600">${stats.totalCredit.toLocaleString()}</div></CardContent>
         </Card>
       </div>
 
@@ -332,52 +354,62 @@ export default function CustomersPage() {
               className="max-w-sm"
             />
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Credit Limit</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredCustomers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableCell className="font-medium">{customer.code}</TableCell>
-                  <TableCell>{customer.name}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col text-sm">
-                      <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{customer.email}</span>
-                      <span className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{customer.phone}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3 text-muted-foreground" />
-                      {customer.city}, {customer.country}
-                    </div>
-                  </TableCell>
-                  <TableCell>${customer.creditLimit.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Badge variant={customer.isActive ? "default" : "secondary"}>
-                      {customer.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-1">
-                      <Button variant="ghost" size="sm" onClick={() => handleView(customer)}><Eye className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(customer)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(customer)} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </TableCell>
+          {isPageLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredCustomers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center h-24">No customers found.</TableCell>
+                  </TableRow>
+                ) : (
+                  filteredCustomers.map((customer) => (
+                    <TableRow key={customer.id}>
+                      <TableCell className="font-medium">{customer.code || "-"}</TableCell>
+                      <TableCell>{customer.name}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col text-sm">
+                          <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{customer.email || "-"}</span>
+                          <span className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{customer.phone || "-"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3 text-muted-foreground" />
+                          {[customer.city, customer.country].filter(Boolean).join(", ") || "-"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={customer.isActive ? "default" : "secondary"}>
+                          {customer.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleView(customer)}><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(customer)}><Edit className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(customer)} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -422,7 +454,7 @@ export default function CustomersPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Customer Details</DialogTitle>
-            <DialogDescription>Full information for {selectedCustomer?.code}</DialogDescription>
+            <DialogDescription>Full information for {selectedCustomer?.code || selectedCustomer?.name}</DialogDescription>
           </DialogHeader>
           {selectedCustomer && (
             <div className="grid gap-4 py-4">
@@ -433,23 +465,19 @@ export default function CustomersPage() {
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Email</Label>
-                  <div className="font-medium">{selectedCustomer.email}</div>
+                  <div className="font-medium">{selectedCustomer.email || "-"}</div>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Phone</Label>
-                  <div className="font-medium">{selectedCustomer.phone}</div>
+                  <div className="font-medium">{selectedCustomer.phone || "-"}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Address</Label>
+                  <div className="font-medium">{selectedCustomer.address || "-"}</div>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Location</Label>
-                  <div className="font-medium">{selectedCustomer.city}, {selectedCustomer.country}</div>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">Credit Limit</Label>
-                  <div className="font-medium">${selectedCustomer.creditLimit.toLocaleString()}</div>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">Payment Terms</Label>
-                  <div className="font-medium">{selectedCustomer.paymentTerms}</div>
+                  <div className="font-medium">{[selectedCustomer.city, selectedCustomer.state, selectedCustomer.country].filter(Boolean).join(", ")}</div>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Status</Label>

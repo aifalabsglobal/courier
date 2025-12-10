@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -40,64 +39,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Edit, Trash2, Eye, Wrench, Loader2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Vehicle {
   id: string;
   registration: string;
-  make: string;
-  model: string;
-  year: number;
-  vehicleType: string;
-  capacityWeight: number;
-  capacityVolume: number;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  vehicleType: { name: string } | null;
+  capacityWeight: number | null;
+  capacityVolume: number | null;
   isActive: boolean;
-  fitnessExpiry: string;
-  insuranceExpiry: string;
+  fitnessExpiry: string | null;
+  insuranceExpiry: string | null;
 }
-
-const mockVehicles: Vehicle[] = [
-  {
-    id: "1",
-    registration: "TRUCK-101",
-    make: "Volvo",
-    model: "FH16",
-    year: 2022,
-    vehicleType: "Heavy Truck",
-    capacityWeight: 25000,
-    capacityVolume: 50,
-    isActive: true,
-    fitnessExpiry: "2024-12-31",
-    insuranceExpiry: "2024-06-30",
-  },
-  {
-    id: "2",
-    registration: "VAN-205",
-    make: "Ford",
-    model: "Transit",
-    year: 2023,
-    vehicleType: "Light Van",
-    capacityWeight: 3500,
-    capacityVolume: 15,
-    isActive: true,
-    fitnessExpiry: "2024-10-15",
-    insuranceExpiry: "2024-08-20",
-  },
-  {
-    id: "3",
-    registration: "TRUCK-309",
-    make: "Mercedes",
-    model: "Actros",
-    year: 2021,
-    vehicleType: "Heavy Truck",
-    capacityWeight: 28000,
-    capacityVolume: 55,
-    isActive: false,
-    fitnessExpiry: "2024-03-01",
-    insuranceExpiry: "2024-02-28",
-  },
-];
 
 const vehicleTypes = [
   "Light Van",
@@ -110,9 +67,10 @@ const vehicleTypes = [
 
 export default function VehiclesPage() {
   const { toast } = useToast();
-  const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -134,11 +92,29 @@ export default function VehiclesPage() {
     insuranceExpiry: "",
   });
 
+  const fetchVehicles = async () => {
+    try {
+      const res = await fetch("/api/vehicles");
+      if (!res.ok) throw new Error("Failed to fetch vehicles");
+      const data = await res.json();
+      setVehicles(data);
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to load vehicles", variant: "destructive" });
+    } finally {
+      setIsPageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVehicles();
+  }, []);
+
   const filteredVehicles = vehicles.filter(
     (vehicle) =>
       vehicle.registration.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vehicle.make.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vehicle.model.toLowerCase().includes(searchTerm.toLowerCase())
+      (vehicle.make && vehicle.make.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (vehicle.model && vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const resetForm = () => {
@@ -156,33 +132,55 @@ export default function VehiclesPage() {
   };
 
   const handleCreate = async () => {
+    if (!formData.registration) {
+      toast({ title: "Error", description: "Registration number is required", variant: "destructive" });
+      return;
+    }
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const res = await fetch("/api/vehicles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registration: formData.registration,
+          make: formData.make,
+          model: formData.model,
+          type: formData.vehicleType,
+          year: formData.year,
+          capacityWeight: formData.capacityWeight,
+          capacityVolume: formData.capacityVolume,
+          fitnessExpiry: formData.fitnessExpiry || null,
+          insuranceExpiry: formData.insuranceExpiry || null,
+          status: "ACTIVE"
+        }),
+      });
 
-    const newVehicle: Vehicle = {
-      id: Date.now().toString(),
-      ...formData,
-      isActive: true,
-    };
-    setVehicles([...vehicles, newVehicle]);
-    setIsCreateDialogOpen(false);
-    resetForm();
-    setIsLoading(false);
-    toast({ title: "Vehicle Registered", description: "New vehicle added to master data." });
+      if (!res.ok) throw new Error("Failed to create vehicle");
+
+      await fetchVehicles();
+      setIsCreateDialogOpen(false);
+      resetForm();
+      toast({ title: "Vehicle Registered", description: "New vehicle added to master data." });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to create vehicle", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEdit = (vehicle: Vehicle) => {
     setSelectedVehicle(vehicle);
     setFormData({
       registration: vehicle.registration,
-      make: vehicle.make,
-      model: vehicle.model,
-      year: vehicle.year,
-      vehicleType: vehicle.vehicleType,
-      capacityWeight: vehicle.capacityWeight,
-      capacityVolume: vehicle.capacityVolume,
-      fitnessExpiry: vehicle.fitnessExpiry,
-      insuranceExpiry: vehicle.insuranceExpiry,
+      make: vehicle.make || "",
+      model: vehicle.model || "",
+      year: vehicle.year || new Date().getFullYear(),
+      vehicleType: vehicle.vehicleType?.name || "",
+      capacityWeight: vehicle.capacityWeight || 0,
+      capacityVolume: vehicle.capacityVolume || 0,
+      fitnessExpiry: vehicle.fitnessExpiry ? vehicle.fitnessExpiry.split('T')[0] : "",
+      insuranceExpiry: vehicle.insuranceExpiry ? vehicle.insuranceExpiry.split('T')[0] : "",
     });
     setIsEditDialogOpen(true);
   };
@@ -190,19 +188,35 @@ export default function VehiclesPage() {
   const handleUpdate = async () => {
     if (!selectedVehicle) return;
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const res = await fetch(`/api/vehicles/${selectedVehicle.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registration: formData.registration,
+          make: formData.make,
+          model: formData.model,
+          type: formData.vehicleType,
+          year: formData.year,
+          capacityWeight: formData.capacityWeight,
+          capacityVolume: formData.capacityVolume,
+          fitnessExpiry: formData.fitnessExpiry || null,
+          insuranceExpiry: formData.insuranceExpiry || null,
+        }),
+      });
 
-    setVehicles(
-      vehicles.map((v) =>
-        v.id === selectedVehicle.id
-          ? { ...v, ...formData }
-          : v
-      )
-    );
-    setIsEditDialogOpen(false);
-    setSelectedVehicle(null);
-    setIsLoading(false);
-    toast({ title: "Vehicle Updated", description: "Vehicle details saved." });
+      if (!res.ok) throw new Error("Failed to update vehicle");
+
+      await fetchVehicles();
+      setIsEditDialogOpen(false);
+      setSelectedVehicle(null);
+      toast({ title: "Vehicle Updated", description: "Vehicle details saved." });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to update vehicle", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleView = (vehicle: Vehicle) => {
@@ -218,23 +232,34 @@ export default function VehiclesPage() {
   const handleDeleteConfirm = async () => {
     if (!selectedVehicle) return;
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const res = await fetch(`/api/vehicles/${selectedVehicle.id}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Failed to delete vehicle");
 
-    setVehicles(vehicles.filter((v) => v.id !== selectedVehicle.id));
-    setIsDeleteDialogOpen(false);
-    setSelectedVehicle(null);
-    setIsLoading(false);
-    toast({ title: "Vehicle Deleted", description: "Vehicle removed from master data.", variant: "destructive" });
+      await fetchVehicles();
+      setIsDeleteDialogOpen(false);
+      setSelectedVehicle(null);
+      toast({ title: "Vehicle Deleted", description: "Vehicle removed from master data.", variant: "destructive" });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to delete vehicle", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const isExpiringSoon = (expiryDate: string) => {
+  const isExpiringSoon = (expiryDate: string | null) => {
+    if (!expiryDate) return false;
     const expiry = new Date(expiryDate);
     const today = new Date();
     const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return daysUntilExpiry <= 30 && daysUntilExpiry > 0;
   };
 
-  const isExpired = (expiryDate: string) => {
+  const isExpired = (expiryDate: string | null) => {
+    if (!expiryDate) return false;
     const expiry = new Date(expiryDate);
     const today = new Date();
     return expiry < today;
@@ -370,81 +395,95 @@ export default function VehiclesPage() {
               className="max-w-sm"
             />
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Registration</TableHead>
-                <TableHead>Make/Model</TableHead>
-                <TableHead>Year</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Capacity</TableHead>
-                <TableHead>Fitness</TableHead>
-                <TableHead>Insurance</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredVehicles.map((vehicle) => (
-                <TableRow key={vehicle.id}>
-                  <TableCell className="font-medium">{vehicle.registration}</TableCell>
-                  <TableCell>{`${vehicle.make} ${vehicle.model}`}</TableCell>
-                  <TableCell>{vehicle.year}</TableCell>
-                  <TableCell>{vehicle.vehicleType}</TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>{vehicle.capacityWeight.toLocaleString()} kg</div>
-                      <div className="text-gray-500">{vehicle.capacityVolume} m³</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        isExpired(vehicle.fitnessExpiry)
-                          ? "destructive"
-                          : isExpiringSoon(vehicle.fitnessExpiry)
-                            ? "secondary"
-                            : "outline"
-                      }
-                    >
-                      {vehicle.fitnessExpiry}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        isExpired(vehicle.insuranceExpiry)
-                          ? "destructive"
-                          : isExpiringSoon(vehicle.insuranceExpiry)
-                            ? "secondary"
-                            : "outline"
-                      }
-                    >
-                      {vehicle.insuranceExpiry}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={vehicle.isActive ? "default" : "secondary"}>
-                      {vehicle.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleView(vehicle)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(vehicle)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(vehicle)} className="text-red-600">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {isPageLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Registration</TableHead>
+                  <TableHead>Make/Model</TableHead>
+                  <TableHead>Year</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Capacity</TableHead>
+                  <TableHead>Fitness</TableHead>
+                  <TableHead>Insurance</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredVehicles.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center h-24">
+                      No vehicles found. Add one to get started.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredVehicles.map((vehicle) => (
+                    <TableRow key={vehicle.id}>
+                      <TableCell className="font-medium">{vehicle.registration}</TableCell>
+                      <TableCell>{`${vehicle.make || "-"} ${vehicle.model || "-"}`}</TableCell>
+                      <TableCell>{vehicle.year || "-"}</TableCell>
+                      <TableCell>{vehicle.vehicleType?.name || "-"}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div>{vehicle.capacityWeight?.toLocaleString() || 0} kg</div>
+                          <div className="text-gray-500">{vehicle.capacityVolume || 0} m³</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            isExpired(vehicle.fitnessExpiry)
+                              ? "destructive"
+                              : isExpiringSoon(vehicle.fitnessExpiry)
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {vehicle.fitnessExpiry ? new Date(vehicle.fitnessExpiry).toLocaleDateString() : "-"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            isExpired(vehicle.insuranceExpiry)
+                              ? "destructive"
+                              : isExpiringSoon(vehicle.insuranceExpiry)
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {vehicle.insuranceExpiry ? new Date(vehicle.insuranceExpiry).toLocaleDateString() : "-"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={vehicle.isActive ? "default" : "secondary"}>
+                          {vehicle.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleView(vehicle)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(vehicle)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(vehicle)} className="text-red-600">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -500,17 +539,17 @@ export default function VehiclesPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Make / Model</Label>
-                  <div className="font-medium">{selectedVehicle.make} {selectedVehicle.model}</div>
+                  <div className="font-medium">{selectedVehicle.make || "-"} {selectedVehicle.model || "-"}</div>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Year</Label>
-                  <div className="font-medium">{selectedVehicle.year}</div>
+                  <div className="font-medium">{selectedVehicle.year || "-"}</div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Type</Label>
-                  <div className="font-medium">{selectedVehicle.vehicleType}</div>
+                  <div className="font-medium">{selectedVehicle.vehicleType?.name || "-"}</div>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Status</Label>
@@ -520,21 +559,21 @@ export default function VehiclesPage() {
               <div className="grid grid-cols-2 gap-4 border-t pt-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Capacity (Weight)</Label>
-                  <div className="font-medium">{selectedVehicle.capacityWeight} kg</div>
+                  <div className="font-medium">{selectedVehicle.capacityWeight || 0} kg</div>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Capacity (Volume)</Label>
-                  <div className="font-medium">{selectedVehicle.capacityVolume} m³</div>
+                  <div className="font-medium">{selectedVehicle.capacityVolume || 0} m³</div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4 border-t pt-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Fitness Expiry</Label>
-                  <div className="font-medium text-sm">{selectedVehicle.fitnessExpiry}</div>
+                  <div className="font-medium text-sm">{selectedVehicle.fitnessExpiry ? new Date(selectedVehicle.fitnessExpiry).toLocaleDateString() : "-"}</div>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Insurance Expiry</Label>
-                  <div className="font-medium text-sm">{selectedVehicle.insuranceExpiry}</div>
+                  <div className="font-medium text-sm">{selectedVehicle.insuranceExpiry ? new Date(selectedVehicle.insuranceExpiry).toLocaleDateString() : "-"}</div>
                 </div>
               </div>
             </div>
