@@ -22,6 +22,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -30,7 +40,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Edit, Trash2, Eye, Wrench, AlertTriangle, Calendar } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, Wrench, AlertTriangle, Calendar, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Maintenance {
   id: string;
@@ -110,9 +121,19 @@ const maintenanceTypes = ["PREVENTIVE", "CORRECTIVE", "EMERGENCY"];
 const maintenanceStatuses = ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
 
 export default function MaintenancePage() {
+  const { toast } = useToast();
   const [maintenance, setMaintenance] = useState<Maintenance[]>(mockMaintenance);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const [selectedRecord, setSelectedRecord] = useState<Maintenance | null>(null);
+
   const [formData, setFormData] = useState({
     vehicleRegistration: "",
     type: "PREVENTIVE",
@@ -134,7 +155,25 @@ export default function MaintenancePage() {
       item.status.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreate = () => {
+  const resetForm = () => {
+    setFormData({
+      vehicleRegistration: "",
+      type: "PREVENTIVE",
+      description: "",
+      cost: 0,
+      odometer: 0,
+      performedBy: "",
+      performedAt: "",
+      nextDueAt: "",
+      status: "SCHEDULED",
+      notes: "",
+    });
+  };
+
+  const handleCreate = async () => {
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     const newMaintenance: Maintenance = {
       id: Date.now().toString(),
       vehicleId: Date.now().toString(),
@@ -152,18 +191,69 @@ export default function MaintenancePage() {
     setMaintenance([...maintenance, newMaintenance]);
     setIsCreateDialogOpen(false);
     resetForm();
+    setIsLoading(false);
+    toast({ title: "Maintenance Scheduled", description: "Service record created successfully." });
   };
 
   const handleEdit = (item: Maintenance) => {
-    // In a real app, this would open an edit dialog
-    console.log("Edit maintenance:", item);
+    setSelectedRecord(item);
+    setFormData({
+      vehicleRegistration: item.vehicleRegistration,
+      type: item.type,
+      description: item.description,
+      cost: item.cost,
+      odometer: item.odometer,
+      performedBy: item.performedBy,
+      performedAt: item.performedAt,
+      nextDueAt: item.nextDueAt,
+      status: item.status,
+      notes: item.notes,
+    });
+    setIsEditDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setMaintenance(maintenance.filter((item) => item.id !== id));
+  const handleUpdate = async () => {
+    if (!selectedRecord) return;
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    setMaintenance(
+      maintenance.map((item) =>
+        item.id === selectedRecord.id
+          ? { ...item, ...formData }
+          : item
+      )
+    );
+    setIsEditDialogOpen(false);
+    setSelectedRecord(null);
+    setIsLoading(false);
+    toast({ title: "Record Updated", description: "Maintenance details updated." });
   };
 
-  const handleComplete = (id: string) => {
+  const handleDeleteClick = (item: Maintenance) => {
+    setSelectedRecord(item);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedRecord) return;
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setMaintenance(maintenance.filter((item) => item.id !== selectedRecord.id));
+    setIsDeleteDialogOpen(false);
+    setSelectedRecord(null);
+    setIsLoading(false);
+    toast({ title: "Record Deleted", description: "Maintenance record removed.", variant: "destructive" });
+  };
+
+  const handleView = (item: Maintenance) => {
+    setSelectedRecord(item);
+    setIsViewDialogOpen(true);
+  };
+
+  const handleComplete = async (id: string) => {
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 300));
     setMaintenance(
       maintenance.map((item) =>
         item.id === id
@@ -171,48 +261,26 @@ export default function MaintenancePage() {
           : item
       )
     );
-  };
-
-  const resetForm = () => {
-    setFormData({
-      vehicleRegistration: "",
-      type: "PREVENTIVE",
-      description: "",
-      cost: 0,
-      odometer: 0,
-      performedBy: "",
-      performedAt: "",
-      nextDueAt: "",
-      status: "SCHEDULED",
-      notes: "",
-    });
+    setIsLoading(false);
+    toast({ title: "Status Updated", description: "Maintenance marked as completed." });
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "COMPLETED":
-        return "default";
-      case "IN_PROGRESS":
-        return "secondary";
-      case "SCHEDULED":
-        return "outline";
-      case "CANCELLED":
-        return "destructive";
-      default:
-        return "outline";
+      case "COMPLETED": return "default";
+      case "IN_PROGRESS": return "secondary";
+      case "SCHEDULED": return "outline";
+      case "CANCELLED": return "destructive";
+      default: return "outline";
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case "PREVENTIVE":
-        return "default";
-      case "CORRECTIVE":
-        return "secondary";
-      case "EMERGENCY":
-        return "destructive";
-      default:
-        return "outline";
+      case "PREVENTIVE": return "default";
+      case "CORRECTIVE": return "secondary";
+      case "EMERGENCY": return "destructive";
+      default: return "outline";
     }
   };
 
@@ -239,6 +307,101 @@ export default function MaintenancePage() {
   const overdueCount = maintenance.filter(item => isOverdue(item.nextDueAt)).length;
   const inProgressCount = maintenance.filter(item => item.status === "IN_PROGRESS").length;
 
+  const MaintenanceForm = () => (
+    <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="vehicleRegistration">Vehicle</Label>
+          <Input
+            id="vehicleRegistration"
+            placeholder="TRUCK-101"
+            value={formData.vehicleRegistration}
+            onChange={(e) => setFormData({ ...formData, vehicleRegistration: e.target.value })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="type">Type</Label>
+          <Select
+            value={formData.type}
+            onValueChange={(value) => setFormData({ ...formData, type: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select type" />
+            </SelectTrigger>
+            <SelectContent>
+              {maintenanceTypes.map((type) => (
+                <SelectItem key={type} value={type}>{type}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid items-center gap-2">
+        <Label htmlFor="description">Description</Label>
+        <Input
+          id="description"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="status">Status</Label>
+          <Select
+            value={formData.status}
+            onValueChange={(value) => setFormData({ ...formData, status: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              {maintenanceStatuses.map((status) => (
+                <SelectItem key={status} value={status}>{status}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="cost">Estimated Cost ($)</Label>
+          <Input
+            id="cost"
+            type="number"
+            value={formData.cost}
+            onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) })}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="performedAt">Performed Date</Label>
+          <Input
+            id="performedAt"
+            type="date"
+            value={formData.performedAt}
+            onChange={(e) => setFormData({ ...formData, performedAt: e.target.value })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="nextDueAt">Next Due Date</Label>
+          <Input
+            id="nextDueAt"
+            type="date"
+            value={formData.nextDueAt}
+            onChange={(e) => setFormData({ ...formData, nextDueAt: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="grid items-center gap-2">
+        <Label htmlFor="notes">Notes</Label>
+        <Input
+          id="notes"
+          value={formData.notes}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -246,142 +409,10 @@ export default function MaintenancePage() {
           <h1 className="text-3xl font-bold text-gray-900">Vehicle Maintenance</h1>
           <p className="text-gray-600">Manage fleet maintenance schedules and records</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Schedule Maintenance
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Schedule Maintenance</DialogTitle>
-              <DialogDescription>
-                Schedule preventive or corrective maintenance for a vehicle.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4 max-h-96 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="vehicleRegistration">Vehicle</Label>
-                  <Input
-                    id="vehicleRegistration"
-                    placeholder="TRUCK-101"
-                    value={formData.vehicleRegistration}
-                    onChange={(e) => setFormData({ ...formData, vehicleRegistration: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="type">Maintenance Type</Label>
-                  <Select
-                    value={formData.type}
-                    onValueChange={(value) => setFormData({ ...formData, type: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {maintenanceTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid items-center gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Input
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="odometer">Odometer (km)</Label>
-                  <Input
-                    id="odometer"
-                    type="number"
-                    value={formData.odometer}
-                    onChange={(e) => setFormData({ ...formData, odometer: parseInt(e.target.value) })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="cost">Estimated Cost ($)</Label>
-                  <Input
-                    id="cost"
-                    type="number"
-                    value={formData.cost}
-                    onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="performedBy">Service Provider</Label>
-                  <Input
-                    id="performedBy"
-                    value={formData.performedBy}
-                    onChange={(e) => setFormData({ ...formData, performedBy: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => setFormData({ ...formData, status: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {maintenanceStatuses.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="performedAt">Performed Date</Label>
-                  <Input
-                    id="performedAt"
-                    type="date"
-                    value={formData.performedAt}
-                    onChange={(e) => setFormData({ ...formData, performedAt: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="nextDueAt">Next Due Date</Label>
-                  <Input
-                    id="nextDueAt"
-                    type="date"
-                    value={formData.nextDueAt}
-                    onChange={(e) => setFormData({ ...formData, nextDueAt: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid items-center gap-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Input
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" onClick={handleCreate}>
-                Schedule Maintenance
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" />
+          Schedule Maintenance
+        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -452,10 +483,8 @@ export default function MaintenancePage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Performed Date</TableHead>
-                <TableHead>Next Due</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead>Cost</TableHead>
-                <TableHead>Provider</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -474,42 +503,22 @@ export default function MaintenancePage() {
                       {item.status}
                     </Badge>
                   </TableCell>
-                  <TableCell>{item.performedAt || "-"}</TableCell>
                   <TableCell>
-                    {item.nextDueAt && (
-                      <Badge
-                        variant={
-                          isOverdue(item.nextDueAt)
-                            ? "destructive"
-                            : isDueSoon(item.nextDueAt)
-                            ? "secondary"
-                            : "outline"
-                        }
-                      >
-                        {item.nextDueAt}
-                      </Badge>
-                    )}
+                    <div className="text-xs">
+                      {item.performedAt ? <div>Done: {item.performedAt}</div> : null}
+                      {item.nextDueAt ? <div className={isOverdue(item.nextDueAt) ? "text-red-600 font-bold" : "text-muted-foreground"}>Due: {item.nextDueAt}</div> : null}
+                    </div>
                   </TableCell>
                   <TableCell>${item.cost.toLocaleString()}</TableCell>
-                  <TableCell>{item.performedBy || "-"}</TableCell>
                   <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="sm">
+                    <div className="flex items-center space-x-1">
+                      <Button variant="ghost" size="sm" onClick={() => handleView(item)}>
                         <Eye className="h-4 w-4" />
                       </Button>
-                      {item.status === "SCHEDULED" && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleComplete(item.id)}
-                        >
-                          <Wrench className="h-4 w-4 text-green-500" />
-                        </Button>
-                      )}
                       <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(item.id)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(item)} className="text-red-600">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -520,6 +529,120 @@ export default function MaintenancePage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Create Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Schedule Maintenance</DialogTitle>
+            <DialogDescription>Create a new maintenance record.</DialogDescription>
+          </DialogHeader>
+          <MaintenanceForm />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Record
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit Maintenance</DialogTitle>
+            <DialogDescription>Update maintenance details.</DialogDescription>
+          </DialogHeader>
+          <MaintenanceForm />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdate} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Update Record
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Maintenance Details</DialogTitle>
+            <DialogDescription>{selectedRecord?.vehicleRegistration}</DialogDescription>
+          </DialogHeader>
+          {selectedRecord && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Type</div>
+                  <div><Badge variant={getTypeColor(selectedRecord.type)}>{selectedRecord.type}</Badge></div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Status</div>
+                  <div><Badge variant={getStatusColor(selectedRecord.status)}>{selectedRecord.status}</Badge></div>
+                </div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">Description</div>
+                <div>{selectedRecord.description}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Cost</div>
+                  <div className="text-lg font-bold">${selectedRecord.cost}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Provider</div>
+                  <div>{selectedRecord.performedBy || "N/A"}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Performed</div>
+                  <div>{selectedRecord.performedAt || "Pending"}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Next Due</div>
+                  <div>{selectedRecord.nextDueAt || "N/A"}</div>
+                </div>
+              </div>
+              <div className="bg-muted p-3 rounded-md mt-2">
+                <div className="text-xs font-medium text-muted-foreground">Notes</div>
+                <div className="text-sm">{selectedRecord.notes || "No notes"}</div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+            <Button onClick={() => { setIsViewDialogOpen(false); if (selectedRecord) handleEdit(selectedRecord); }}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the maintenance record for <strong>{selectedRecord?.vehicleRegistration}</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

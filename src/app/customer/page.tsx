@@ -1,29 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { Truck, ArrowLeft, Package, MapPin, Clock, User, LogIn, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Truck, ArrowLeft, Package, MapPin, Clock, User } from "lucide-react";
+import { SignIn, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 
 export default function CustomerPage() {
-    const [isLogin, setIsLogin] = useState(true);
-    const [showPassword, setShowPassword] = useState(false);
-    const [formData, setFormData] = useState({
-        email: "",
-        password: "",
-        name: "",
-        confirmPassword: "",
-    });
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        // Redirect to dashboard for demo
-        window.location.href = "/dashboard";
-    };
-
     const recentShipments = [
         { id: "TRK-2024-156", origin: "Dallas, TX", destination: "Houston, TX", status: "Delivered", date: "Dec 8, 2024" },
         { id: "TRK-2024-142", origin: "Los Angeles, CA", destination: "San Diego, CA", status: "In Transit", date: "Dec 9, 2024" },
@@ -52,143 +33,70 @@ export default function CustomerPage() {
 
             <div className="max-w-6xl mx-auto px-4 py-12">
                 <div className="grid lg:grid-cols-2 gap-12 items-start">
-                    {/* Login/Register Form */}
-                    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-700">
-                        <div className="flex items-center gap-3 mb-8">
-                            <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                                <User className="w-6 h-6 text-blue-400" />
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-bold text-white">
-                                    {isLogin ? "Customer Login" : "Create Account"}
-                                </h2>
-                                <p className="text-slate-400 text-sm">
-                                    {isLogin ? "Access your shipments and account" : "Start shipping with Courier today"}
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Toggle */}
-                        <div className="flex bg-slate-700/50 rounded-xl p-1 mb-8">
-                            <button
-                                onClick={() => setIsLogin(true)}
-                                className={`flex-1 py-2.5 rounded-lg font-medium transition ${isLogin ? "bg-blue-500 text-white" : "text-slate-400 hover:text-white"
-                                    }`}
-                            >
-                                Login
-                            </button>
-                            <button
-                                onClick={() => setIsLogin(false)}
-                                className={`flex-1 py-2.5 rounded-lg font-medium transition ${!isLogin ? "bg-blue-500 text-white" : "text-slate-400 hover:text-white"
-                                    }`}
-                            >
-                                Register
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="space-y-5">
-                            {!isLogin && (
-                                <div>
-                                    <label className="text-slate-400 text-sm mb-2 block">Full Name</label>
-                                    <div className="relative">
-                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                                        <input
-                                            type="text"
-                                            name="name"
-                                            value={formData.name}
-                                            onChange={handleChange}
-                                            placeholder="John Smith"
-                                            className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
-                                        />
+                    {/* Clerk Sign In */}
+                    <div className="flex flex-col items-center">
+                        <SignedOut>
+                            <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-700 w-full max-w-md">
+                                <div className="flex items-center gap-3 mb-8">
+                                    <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                                        <User className="w-6 h-6 text-blue-400" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-white">Customer Portal</h2>
+                                        <p className="text-slate-400 text-sm">Sign in to manage your shipments</p>
                                     </div>
                                 </div>
-                            )}
-
-                            <div>
-                                <label className="text-slate-400 text-sm mb-2 block">Email Address</label>
-                                <div className="relative">
-                                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                                    <input
-                                        type="email"
-                                        name="email"
-                                        value={formData.email}
-                                        onChange={handleChange}
-                                        placeholder="john@example.com"
-                                        className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
-                                    />
-                                </div>
+                                <SignIn
+                                    appearance={{
+                                        elements: {
+                                            rootBox: "w-full",
+                                            card: "bg-transparent shadow-none p-0",
+                                            headerTitle: "hidden",
+                                            headerSubtitle: "hidden",
+                                            socialButtonsBlockButton: "bg-slate-700 border-slate-600 text-white hover:bg-slate-600",
+                                            formFieldInput: "bg-slate-700/50 border-slate-600 text-white",
+                                            formButtonPrimary: "bg-gradient-to-r from-blue-500 to-purple-600 hover:opacity-90",
+                                            footerActionLink: "text-blue-400 hover:text-blue-300",
+                                            identityPreviewEditButton: "text-blue-400",
+                                        }
+                                    }}
+                                    routing="hash"
+                                    signUpUrl="/sign-up"
+                                    redirectUrl="/dashboard"
+                                />
                             </div>
+                        </SignedOut>
 
-                            <div>
-                                <label className="text-slate-400 text-sm mb-2 block">Password</label>
-                                <div className="relative">
-                                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                                    <input
-                                        type={showPassword ? "text" : "password"}
-                                        name="password"
-                                        value={formData.password}
-                                        onChange={handleChange}
-                                        placeholder="••••••••"
-                                        className="w-full pl-12 pr-12 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                        <SignedIn>
+                            <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-700 w-full max-w-md text-center">
+                                <div className="flex flex-col items-center gap-4 mb-6">
+                                    <UserButton
+                                        afterSignOutUrl="/"
+                                        appearance={{
+                                            elements: {
+                                                avatarBox: "h-20 w-20",
+                                            }
+                                        }}
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                                    <h2 className="text-2xl font-bold text-white">Welcome Back!</h2>
+                                    <p className="text-slate-400">You are signed in to your account.</p>
+                                </div>
+                                <div className="space-y-3">
+                                    <Link
+                                        href="/dashboard"
+                                        className="block w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-xl font-medium hover:opacity-90 transition text-center"
                                     >
-                                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {!isLogin && (
-                                <div>
-                                    <label className="text-slate-400 text-sm mb-2 block">Confirm Password</label>
-                                    <div className="relative">
-                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                                        <input
-                                            type="password"
-                                            name="confirmPassword"
-                                            value={formData.confirmPassword}
-                                            onChange={handleChange}
-                                            placeholder="••••••••"
-                                            className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {isLogin && (
-                                <div className="flex items-center justify-between">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="checkbox" className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500" />
-                                        <span className="text-slate-400 text-sm">Remember me</span>
-                                    </label>
-                                    <Link href="/forgot-password" className="text-blue-400 text-sm hover:text-blue-300">
-                                        Forgot password?
+                                        Go to Dashboard
+                                    </Link>
+                                    <Link
+                                        href="/track"
+                                        className="block w-full bg-slate-700/50 border border-slate-600 text-white py-3 rounded-xl hover:bg-slate-700 transition text-center"
+                                    >
+                                        Track a Package
                                     </Link>
                                 </div>
-                            )}
-
-                            <button
-                                type="submit"
-                                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-xl font-medium hover:opacity-90 transition flex items-center justify-center gap-2"
-                            >
-                                <LogIn className="w-5 h-5" />
-                                {isLogin ? "Sign In" : "Create Account"}
-                            </button>
-                        </form>
-
-                        {isLogin && (
-                            <div className="mt-6 text-center">
-                                <p className="text-slate-400 text-sm">
-                                    Don&apos;t have an account?{" "}
-                                    <button onClick={() => setIsLogin(false)} className="text-blue-400 hover:text-blue-300">
-                                        Register now
-                                    </button>
-                                </p>
                             </div>
-                        )}
+                        </SignedIn>
                     </div>
 
                     {/* Info Panel */}

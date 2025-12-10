@@ -22,6 +22,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -31,7 +41,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Search, Edit, Trash2, Eye, Truck, MapPin, Clock } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, Truck, MapPin, Clock, Loader2, Calendar } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Trip {
   id: string;
@@ -121,10 +132,19 @@ const tripStatuses = ["PLANNED", "DISPATCHED", "IN_TRANSIT", "DELIVERED", "COMPL
 const priorities = ["LOW", "NORMAL", "HIGH", "URGENT"];
 
 export default function TripsPage() {
+  const { toast } = useToast();
   const [trips, setTrips] = useState<Trip[]>(mockTrips);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+
   const [formData, setFormData] = useState({
     tripNo: "",
     orderIds: "",
@@ -148,7 +168,28 @@ export default function TripsPage() {
       trip.driverName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreate = () => {
+  const resetForm = () => {
+    setFormData({
+      tripNo: "",
+      orderIds: "",
+      vehicleRegistration: "",
+      driverName: "",
+      status: "PLANNED",
+      priority: "NORMAL",
+      origin: "",
+      destination: "",
+      distance: 0,
+      estimatedHours: 0,
+      plannedDeparture: "",
+      plannedArrival: "",
+      estimatedCost: 0,
+    });
+  };
+
+  const handleCreate = async () => {
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     const newTrip: Trip = {
       id: Date.now().toString(),
       tripNo: formData.tripNo,
@@ -172,10 +213,12 @@ export default function TripsPage() {
     setTrips([...trips, newTrip]);
     setIsCreateDialogOpen(false);
     resetForm();
+    setIsLoading(false);
+    toast({ title: "Trip Created", description: "New trip has been scheduled." });
   };
 
   const handleEdit = (trip: Trip) => {
-    setEditingTrip(trip);
+    setSelectedTrip(trip);
     setFormData({
       tripNo: trip.tripNo,
       orderIds: trip.orderIds.join(", "),
@@ -191,99 +234,230 @@ export default function TripsPage() {
       plannedArrival: trip.plannedArrival,
       estimatedCost: trip.estimatedCost,
     });
+    setIsEditDialogOpen(true);
   };
 
-  const handleUpdate = () => {
-    if (editingTrip) {
-      setTrips(
-        trips.map((t) =>
-          t.id === editingTrip.id
-            ? {
-                ...t,
-                tripNo: formData.tripNo,
-                orderIds: formData.orderIds.split(",").map(id => id.trim()),
-                vehicleRegistration: formData.vehicleRegistration,
-                driverName: formData.driverName,
-                status: formData.status,
-                priority: formData.priority,
-                origin: formData.origin,
-                destination: formData.destination,
-                distance: formData.distance,
-                estimatedHours: formData.estimatedHours,
-                plannedDeparture: formData.plannedDeparture,
-                plannedArrival: formData.plannedArrival,
-                estimatedCost: formData.estimatedCost,
-              }
-            : t
-        )
-      );
-      setEditingTrip(null);
-      resetForm();
-    }
+  const handleUpdate = async () => {
+    if (!selectedTrip) return;
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    setTrips(
+      trips.map((t) =>
+        t.id === selectedTrip.id
+          ? {
+            ...t,
+            tripNo: formData.tripNo,
+            orderIds: formData.orderIds.split(",").map(id => id.trim()),
+            vehicleRegistration: formData.vehicleRegistration,
+            driverName: formData.driverName,
+            status: formData.status,
+            priority: formData.priority,
+            origin: formData.origin,
+            destination: formData.destination,
+            distance: formData.distance,
+            estimatedHours: formData.estimatedHours,
+            plannedDeparture: formData.plannedDeparture,
+            plannedArrival: formData.plannedArrival,
+            estimatedCost: formData.estimatedCost,
+          }
+          : t
+      )
+    );
+    setIsEditDialogOpen(false);
+    setSelectedTrip(null);
+    setIsLoading(false);
+    toast({ title: "Trip Updated", description: "Trip details have been saved." });
   };
 
-  const handleDelete = (id: string) => {
-    setTrips(trips.filter((t) => t.id !== id));
+  const handleView = (trip: Trip) => {
+    setSelectedTrip(trip);
+    setIsViewDialogOpen(true);
   };
 
-  const resetForm = () => {
-    setFormData({
-      tripNo: "",
-      orderIds: "",
-      vehicleRegistration: "",
-      driverName: "",
-      status: "PLANNED",
-      priority: "NORMAL",
-      origin: "",
-      destination: "",
-      distance: 0,
-      estimatedHours: 0,
-      plannedDeparture: "",
-      plannedArrival: "",
-      estimatedCost: 0,
-    });
+  const handleDeleteClick = (trip: Trip) => {
+    setSelectedTrip(trip);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedTrip) return;
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    setTrips(trips.filter((t) => t.id !== selectedTrip.id));
+    setIsDeleteDialogOpen(false);
+    setSelectedTrip(null);
+    setIsLoading(false);
+    toast({ title: "Trip Deleted", description: "The trip has been removed.", variant: "destructive" });
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "PLANNED":
-        return "secondary";
-      case "DISPATCHED":
-        return "default";
-      case "IN_TRANSIT":
-        return "secondary";
-      case "DELIVERED":
-        return "default";
-      case "COMPLETED":
-        return "default";
-      case "CANCELLED":
-        return "destructive";
-      default:
-        return "outline";
+      case "PLANNED": return "secondary";
+      case "DISPATCHED": return "default";
+      case "IN_TRANSIT": return "secondary";
+      case "DELIVERED": return "default";
+      case "COMPLETED": return "default";
+      case "CANCELLED": return "destructive";
+      default: return "outline";
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "URGENT":
-        return "destructive";
-      case "HIGH":
-        return "secondary";
-      case "NORMAL":
-        return "default";
-      case "LOW":
-        return "outline";
-      default:
-        return "outline";
+      case "URGENT": return "destructive";
+      case "HIGH": return "secondary";
+      case "NORMAL": return "default";
+      case "LOW": return "outline";
+      default: return "outline";
     }
   };
 
-  const getProgressColor = (progress: number) => {
-    if (progress === 100) return "bg-green-500";
-    if (progress >= 50) return "bg-blue-500";
-    if (progress >= 25) return "bg-yellow-500";
-    return "bg-gray-300";
-  };
+  const TripForm = () => (
+    <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="tripNo">Trip No</Label>
+          <Input
+            id="tripNo"
+            value={formData.tripNo}
+            onChange={(e) => setFormData({ ...formData, tripNo: e.target.value })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="priority">Priority</Label>
+          <Select
+            value={formData.priority}
+            onValueChange={(value) => setFormData({ ...formData, priority: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select priority" />
+            </SelectTrigger>
+            <SelectContent>
+              {priorities.map((priority) => (
+                <SelectItem key={priority} value={priority}>
+                  {priority}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid items-center gap-2">
+        <Label htmlFor="orderIds">Order IDs (comma separated)</Label>
+        <Input
+          id="orderIds"
+          placeholder="ORD-001, ORD-002"
+          value={formData.orderIds}
+          onChange={(e) => setFormData({ ...formData, orderIds: e.target.value })}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="status">Status</Label>
+          <Select
+            value={formData.status}
+            onValueChange={(value) => setFormData({ ...formData, status: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              {tripStatuses.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="vehicleRegistration">Vehicle</Label>
+          <Input
+            id="vehicleRegistration"
+            value={formData.vehicleRegistration}
+            onChange={(e) => setFormData({ ...formData, vehicleRegistration: e.target.value })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="driverName">Driver</Label>
+          <Input
+            id="driverName"
+            value={formData.driverName}
+            onChange={(e) => setFormData({ ...formData, driverName: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="origin">Origin</Label>
+          <Input
+            id="origin"
+            value={formData.origin}
+            onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="destination">Destination</Label>
+          <Input
+            id="destination"
+            value={formData.destination}
+            onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="distance">Distance (km)</Label>
+          <Input
+            id="distance"
+            type="number"
+            value={formData.distance}
+            onChange={(e) => setFormData({ ...formData, distance: parseFloat(e.target.value) })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="estimatedHours">Est. Hours</Label>
+          <Input
+            id="estimatedHours"
+            type="number"
+            value={formData.estimatedHours}
+            onChange={(e) => setFormData({ ...formData, estimatedHours: parseFloat(e.target.value) })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="estimatedCost">Est. Cost ($)</Label>
+          <Input
+            id="estimatedCost"
+            type="number"
+            value={formData.estimatedCost}
+            onChange={(e) => setFormData({ ...formData, estimatedCost: parseFloat(e.target.value) })}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="plannedDeparture">Planned Departure</Label>
+          <Input
+            id="plannedDeparture"
+            type="datetime-local"
+            value={formData.plannedDeparture}
+            onChange={(e) => setFormData({ ...formData, plannedDeparture: e.target.value })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="plannedArrival">Planned Arrival</Label>
+          <Input
+            id="plannedArrival"
+            type="datetime-local"
+            value={formData.plannedArrival}
+            onChange={(e) => setFormData({ ...formData, plannedArrival: e.target.value })}
+          />
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -292,151 +466,10 @@ export default function TripsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Trips</h1>
           <p className="text-gray-600">Manage your transportation trips and routes</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Trip
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Create New Trip</DialogTitle>
-              <DialogDescription>
-                Create a new transportation trip. Assign vehicle and driver.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4 max-h-96 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="tripNo">Trip No</Label>
-                  <Input
-                    id="tripNo"
-                    value={formData.tripNo}
-                    onChange={(e) => setFormData({ ...formData, tripNo: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="priority">Priority</Label>
-                  <Select
-                    value={formData.priority}
-                    onValueChange={(value) => setFormData({ ...formData, priority: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {priorities.map((priority) => (
-                        <SelectItem key={priority} value={priority}>
-                          {priority}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid items-center gap-2">
-                <Label htmlFor="orderIds">Order IDs (comma separated)</Label>
-                <Input
-                  id="orderIds"
-                  placeholder="ORD-001, ORD-002"
-                  value={formData.orderIds}
-                  onChange={(e) => setFormData({ ...formData, orderIds: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="vehicleRegistration">Vehicle</Label>
-                  <Input
-                    id="vehicleRegistration"
-                    value={formData.vehicleRegistration}
-                    onChange={(e) => setFormData({ ...formData, vehicleRegistration: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="driverName">Driver</Label>
-                  <Input
-                    id="driverName"
-                    value={formData.driverName}
-                    onChange={(e) => setFormData({ ...formData, driverName: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="origin">Origin</Label>
-                  <Input
-                    id="origin"
-                    value={formData.origin}
-                    onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="destination">Destination</Label>
-                  <Input
-                    id="destination"
-                    value={formData.destination}
-                    onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="distance">Distance (km)</Label>
-                  <Input
-                    id="distance"
-                    type="number"
-                    value={formData.distance}
-                    onChange={(e) => setFormData({ ...formData, distance: parseFloat(e.target.value) })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="estimatedHours">Est. Hours</Label>
-                  <Input
-                    id="estimatedHours"
-                    type="number"
-                    value={formData.estimatedHours}
-                    onChange={(e) => setFormData({ ...formData, estimatedHours: parseFloat(e.target.value) })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="estimatedCost">Est. Cost ($)</Label>
-                  <Input
-                    id="estimatedCost"
-                    type="number"
-                    value={formData.estimatedCost}
-                    onChange={(e) => setFormData({ ...formData, estimatedCost: parseFloat(e.target.value) })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="plannedDeparture">Planned Departure</Label>
-                  <Input
-                    id="plannedDeparture"
-                    type="datetime-local"
-                    value={formData.plannedDeparture}
-                    onChange={(e) => setFormData({ ...formData, plannedDeparture: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="plannedArrival">Planned Arrival</Label>
-                  <Input
-                    id="plannedArrival"
-                    type="datetime-local"
-                    value={formData.plannedArrival}
-                    onChange={(e) => setFormData({ ...formData, plannedArrival: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" onClick={handleCreate}>
-                Create Trip
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" />
+          New Trip
+        </Button>
       </div>
 
       <Card>
@@ -478,7 +511,7 @@ export default function TripsPage() {
                   <TableCell>
                     <div className="text-sm">
                       {trip.orderIds.map((orderId, index) => (
-                        <div key={index} className="text-blue-600 hover:underline cursor-pointer">
+                        <div key={index} className="text-blue-600 hover:underline cursor-pointer font-xs">
                           {orderId}
                         </div>
                       ))}
@@ -487,7 +520,7 @@ export default function TripsPage() {
                   <TableCell>
                     <div className="text-sm">
                       <div className="font-medium">{trip.vehicleRegistration}</div>
-                      <div className="text-gray-500">{trip.driverName}</div>
+                      <div className="text-gray-500 text-xs">{trip.driverName}</div>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -496,8 +529,11 @@ export default function TripsPage() {
                         <MapPin className="h-3 w-3 mr-1" />
                         {trip.origin}
                       </div>
-                      <div className="text-gray-500">→ {trip.destination}</div>
-                      <div className="text-gray-400">{trip.distance} km</div>
+                      <div className="text-gray-500 pl-4">↓</div>
+                      <div className="flex items-center">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {trip.destination}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -513,35 +549,36 @@ export default function TripsPage() {
                   <TableCell>
                     <div className="w-20">
                       <Progress value={trip.progress} className="h-2" />
-                      <div className="text-xs text-gray-500 mt-1">{trip.progress}%</div>
+                      <div className="text-xs text-gray-500 mt-1 center">{trip.progress}%</div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm">
-                      <div className="flex items-center">
+                    <div className="text-xs">
+                      <div className="flex items-center" title="Planned Departure">
                         <Clock className="h-3 w-3 mr-1" />
-                        {trip.plannedDeparture}
+                        {trip.plannedDeparture.split(' ')[0]}
                       </div>
-                      <div className="text-gray-500">→ {trip.plannedArrival}</div>
+                      <div className="text-gray-500 pl-4">↓</div>
+                      <div className="flex items-center" title="Planned Arrival">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {trip.plannedArrival.split(' ')[0]}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
-                      <div>Est: ${trip.estimatedCost}</div>
-                      {trip.actualCost > 0 && (
-                        <div className="text-gray-500">Act: ${trip.actualCost}</div>
-                      )}
+                      <div>${trip.estimatedCost}</div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="sm">
+                    <div className="flex items-center space-x-1">
+                      <Button variant="ghost" size="sm" onClick={() => handleView(trip)}>
                         <Eye className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleEdit(trip)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(trip.id)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(trip)} className="text-red-600">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -553,8 +590,28 @@ export default function TripsPage() {
         </CardContent>
       </Card>
 
+      {/* Create Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Create New Trip</DialogTitle>
+            <DialogDescription>
+              Create a new transportation trip. Assign vehicle and driver.
+            </DialogDescription>
+          </DialogHeader>
+          <TripForm />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Trip
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Dialog */}
-      <Dialog open={!!editingTrip} onOpenChange={() => setEditingTrip(null)}>
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Edit Trip</DialogTitle>
@@ -562,51 +619,122 @@ export default function TripsPage() {
               Update trip information. Make sure to save your changes.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4 max-h-96 overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid items-center gap-2">
-                <Label htmlFor="edit-tripNo">Trip No</Label>
-                <Input
-                  id="edit-tripNo"
-                  value={formData.tripNo}
-                  onChange={(e) => setFormData({ ...formData, tripNo: e.target.value })}
-                />
-              </div>
-              <div className="grid items-center gap-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value) => setFormData({ ...formData, status: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tripStatuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid items-center gap-2">
-              <Label htmlFor="edit-orderIds">Order IDs (comma separated)</Label>
-              <Input
-                id="edit-orderIds"
-                value={formData.orderIds}
-                onChange={(e) => setFormData({ ...formData, orderIds: e.target.value })}
-              />
-            </div>
-          </div>
+          <TripForm />
           <DialogFooter>
-            <Button type="submit" onClick={handleUpdate}>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdate} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Update Trip
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* View Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Trip Details</DialogTitle>
+            <DialogDescription>{selectedTrip?.tripNo}</DialogDescription>
+          </DialogHeader>
+          {selectedTrip && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Status</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex justify-between items-center">
+                      <Badge variant={getStatusColor(selectedTrip.status)}>{selectedTrip.status}</Badge>
+                      <Badge variant={getPriorityColor(selectedTrip.priority)}>{selectedTrip.priority}</Badge>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">Progress: {selectedTrip.progress}%</div>
+                    <Progress value={selectedTrip.progress} className="h-1 mt-1" />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Cost</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">${selectedTrip.estimatedCost}</div>
+                    <div className="text-xs text-muted-foreground">Estimated</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Vehicle Information</Label>
+                  <div className="font-medium">{selectedTrip.vehicleRegistration}</div>
+                  <div className="text-sm text-gray-500">{selectedTrip.driverName}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Metric</Label>
+                  <div className="font-medium">{selectedTrip.distance} km</div>
+                  <div className="text-sm text-gray-500">{selectedTrip.estimatedHours} hrs est.</div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <Label className="text-xs text-muted-foreground mb-2 block">Route Timeline</Label>
+                <div className="relative border-l-2 border-gray-200 ml-3 space-y-6 pb-2">
+                  <div className="mb-8 ml-6 relative">
+                    <span className="absolute -left-[31px] flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 ring-4 ring-white">
+                      <MapPin className="h-3 w-3 text-blue-600" />
+                    </span>
+                    <h3 className="flex items-center mb-1 text-sm font-semibold text-gray-900">{selectedTrip.origin}</h3>
+                    <time className="block mb-2 text-xs font-normal leading-none text-gray-400">{selectedTrip.plannedDeparture}</time>
+                  </div>
+                  <div className="ml-6 relative">
+                    <span className="absolute -left-[31px] flex h-6 w-6 items-center justify-center rounded-full bg-green-100 ring-4 ring-white">
+                      <MapPin className="h-3 w-3 text-green-600" />
+                    </span>
+                    <h3 className="flex items-center mb-1 text-sm font-semibold text-gray-900">{selectedTrip.destination}</h3>
+                    <time className="block mb-2 text-xs font-normal leading-none text-gray-400">{selectedTrip.plannedArrival}</time>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground">Orders</Label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {selectedTrip.orderIds.map(id => (
+                    <Badge key={id} variant="outline" className="font-mono text-xs">{id}</Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+            <Button onClick={() => { setIsViewDialogOpen(false); if (selectedTrip) handleEdit(selectedTrip); }}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete trip <strong>{selectedTrip?.tripNo}</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

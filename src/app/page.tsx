@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { Package, Truck, MapPin, Clock, Shield, Phone, ArrowRight, Search } from "lucide-react";
+import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 
 export default function HomePage() {
   return (
@@ -22,14 +25,32 @@ export default function HomePage() {
               <Link href="/contact" className="text-slate-300 hover:text-white transition">Contact</Link>
             </div>
             <div className="flex items-center gap-4">
-              <Link href="/customer" className="text-slate-300 hover:text-white transition">Login</Link>
-              <Link href="/book" className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition">
-                Book Now
-              </Link>
+              <SignedOut>
+                <SignInButton mode="modal">
+                  <button className="text-slate-300 hover:text-white transition">Login</button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition">
+                    Sign Up
+                  </button>
+                </SignUpButton>
+              </SignedOut>
+              <SignedIn>
+                <Link href="/dashboard" className="text-slate-300 hover:text-white transition">Dashboard</Link>
+                <UserButton
+                  afterSignOutUrl="/"
+                  appearance={{
+                    elements: {
+                      avatarBox: "h-9 w-9",
+                    }
+                  }}
+                />
+              </SignedIn>
             </div>
           </div>
         </div>
       </nav>
+
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-4">

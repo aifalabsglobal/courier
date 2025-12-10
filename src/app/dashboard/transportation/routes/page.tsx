@@ -22,8 +22,19 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Edit, Trash2, Route, Clock, MapPin } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Route, Clock, MapPin, Eye, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface RouteData {
     id: string;
@@ -86,14 +97,26 @@ const mockRoutes: RouteData[] = [
 ];
 
 export default function RoutesPage() {
+    const { toast } = useToast();
     const [routes, setRoutes] = useState<RouteData[]>(mockRoutes);
     const [searchTerm, setSearchTerm] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Dialog states
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+    // Selected route
+    const [selectedRoute, setSelectedRoute] = useState<RouteData | null>(null);
+
     const [formData, setFormData] = useState({
         origin: "",
         destination: "",
         distance: 0,
         normalHours: 0,
+        isActive: true
     });
 
     const filteredRoutes = routes.filter(
@@ -102,24 +125,116 @@ export default function RoutesPage() {
             route.destination.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleCreate = () => {
+    const resetForm = () => {
+        setFormData({ origin: "", destination: "", distance: 0, normalHours: 0, isActive: true });
+    };
+
+    const handleCreate = async () => {
+        setIsLoading(true);
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         const newRoute: RouteData = {
             id: Date.now().toString(),
             ...formData,
-            isActive: true,
         };
         setRoutes([...routes, newRoute]);
         setIsCreateDialogOpen(false);
-        setFormData({ origin: "", destination: "", distance: 0, normalHours: 0 });
+        resetForm();
+        setIsLoading(false);
+        toast({ title: "Route Created", description: `Route from ${formData.origin} to ${formData.destination} added.` });
     };
 
-    const handleDelete = (id: string) => {
-        setRoutes(routes.filter((r) => r.id !== id));
+    const handleEdit = (route: RouteData) => {
+        setSelectedRoute(route);
+        setFormData({
+            origin: route.origin,
+            destination: route.destination,
+            distance: route.distance,
+            normalHours: route.normalHours,
+            isActive: route.isActive
+        });
+        setIsEditDialogOpen(true);
     };
 
-    const toggleActive = (id: string) => {
-        setRoutes(routes.map((r) => (r.id === id ? { ...r, isActive: !r.isActive } : r)));
+    const handleUpdate = async () => {
+        if (!selectedRoute) return;
+        setIsLoading(true);
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        setRoutes(routes.map(r =>
+            r.id === selectedRoute.id
+                ? { ...r, ...formData }
+                : r
+        ));
+        setIsEditDialogOpen(false);
+        setSelectedRoute(null);
+        setIsLoading(false);
+        toast({ title: "Route Updated", description: "Route details updated." });
     };
+
+    const handleView = (route: RouteData) => {
+        setSelectedRoute(route);
+        setIsViewDialogOpen(true);
+    };
+
+    const handleDeleteClick = (route: RouteData) => {
+        setSelectedRoute(route);
+        setIsDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!selectedRoute) return;
+        setIsLoading(true);
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        setRoutes(routes.filter((r) => r.id !== selectedRoute.id));
+        setIsDeleteDialogOpen(false);
+        setSelectedRoute(null);
+        setIsLoading(false);
+        toast({ title: "Route Deleted", description: "Route removed from configuration.", variant: "destructive" });
+    };
+
+    const RouteForm = () => (
+        <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
+            <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Origin</Label>
+                <Input
+                    placeholder="City, State"
+                    value={formData.origin}
+                    onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                    className="col-span-3"
+                />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Destination</Label>
+                <Input
+                    placeholder="City, State"
+                    value={formData.destination}
+                    onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                    className="col-span-3"
+                />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Distance (km)</Label>
+                <Input
+                    type="number"
+                    value={formData.distance}
+                    onChange={(e) => setFormData({ ...formData, distance: parseFloat(e.target.value) })}
+                    className="col-span-3"
+                />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Transit (hrs)</Label>
+                <Input
+                    type="number"
+                    step="0.5"
+                    value={formData.normalHours}
+                    onChange={(e) => setFormData({ ...formData, normalHours: parseFloat(e.target.value) })}
+                    className="col-span-3"
+                />
+            </div>
+        </div>
+    );
 
     return (
         <div className="space-y-6">
@@ -128,68 +243,10 @@ export default function RoutesPage() {
                     <h1 className="text-3xl font-bold text-gray-900">Routes</h1>
                     <p className="text-gray-600">Manage transportation routes and lane configurations</p>
                 </div>
-                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Route
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                        <DialogHeader>
-                            <DialogTitle>Add New Route</DialogTitle>
-                            <DialogDescription>
-                                Create a new transportation route between two locations.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="origin" className="text-right">Origin</Label>
-                                <Input
-                                    id="origin"
-                                    placeholder="City, State"
-                                    value={formData.origin}
-                                    onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-                                    className="col-span-3"
-                                />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="destination" className="text-right">Destination</Label>
-                                <Input
-                                    id="destination"
-                                    placeholder="City, State"
-                                    value={formData.destination}
-                                    onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                                    className="col-span-3"
-                                />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="distance" className="text-right">Distance (km)</Label>
-                                <Input
-                                    id="distance"
-                                    type="number"
-                                    value={formData.distance}
-                                    onChange={(e) => setFormData({ ...formData, distance: parseFloat(e.target.value) })}
-                                    className="col-span-3"
-                                />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="normalHours" className="text-right">Transit Time (hrs)</Label>
-                                <Input
-                                    id="normalHours"
-                                    type="number"
-                                    step="0.5"
-                                    value={formData.normalHours}
-                                    onChange={(e) => setFormData({ ...formData, normalHours: parseFloat(e.target.value) })}
-                                    className="col-span-3"
-                                />
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button type="submit" onClick={handleCreate}>Create Route</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Route
+                </Button>
             </div>
 
             {/* Stats Cards */}
@@ -275,18 +332,19 @@ export default function RoutesPage() {
                                     <TableCell>
                                         <Badge
                                             variant={route.isActive ? "default" : "secondary"}
-                                            className="cursor-pointer"
-                                            onClick={() => toggleActive(route.id)}
                                         >
                                             {route.isActive ? "Active" : "Inactive"}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center space-x-2">
-                                            <Button variant="ghost" size="sm">
+                                            <Button variant="ghost" size="sm" onClick={() => handleView(route)}>
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handleEdit(route)}>
                                                 <Edit className="h-4 w-4" />
                                             </Button>
-                                            <Button variant="ghost" size="sm" onClick={() => handleDelete(route.id)}>
+                                            <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(route)}>
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </div>
@@ -297,6 +355,105 @@ export default function RoutesPage() {
                     </Table>
                 </CardContent>
             </Card>
+
+            {/* Create Dialog */}
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Add New Route</DialogTitle>
+                        <DialogDescription>Create a new transportation route.</DialogDescription>
+                    </DialogHeader>
+                    <RouteForm />
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCreate} disabled={isLoading}>
+                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Create
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Dialog */}
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Edit Route</DialogTitle>
+                        <DialogDescription>Update route information.</DialogDescription>
+                    </DialogHeader>
+                    <RouteForm />
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleUpdate} disabled={isLoading}>
+                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* View Dialog */}
+            <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Route Details</DialogTitle>
+                        <DialogDescription>Information for {selectedRoute?.origin} to {selectedRoute?.destination}</DialogDescription>
+                    </DialogHeader>
+                    {selectedRoute && (
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                    <Label className="text-muted-foreground text-xs">Origin</Label>
+                                    <div className="font-medium flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedRoute.origin}</div>
+                                </div>
+                                <div className="col-span-2">
+                                    <Label className="text-muted-foreground text-xs">Destination</Label>
+                                    <div className="font-medium flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedRoute.destination}</div>
+                                </div>
+                                <div>
+                                    <Label className="text-muted-foreground text-xs">Distance</Label>
+                                    <div className="font-medium">{selectedRoute.distance} km</div>
+                                </div>
+                                <div>
+                                    <Label className="text-muted-foreground text-xs">Transit Time</Label>
+                                    <div className="font-medium">{selectedRoute.normalHours} hrs</div>
+                                </div>
+                                <div>
+                                    <Label className="text-muted-foreground text-xs">Status</Label>
+                                    <Badge className="mt-1" variant={selectedRoute.isActive ? "default" : "secondary"}>
+                                        {selectedRoute.isActive ? "Active" : "Inactive"}
+                                    </Badge>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+                        <Button onClick={() => { setIsViewDialogOpen(false); if (selectedRoute) handleEdit(selectedRoute); }}>
+                            <Edit className="h-4 w-4 mr-2" />Edit
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete the route from <strong>{selectedRoute?.origin}</strong> to <strong>{selectedRoute?.destination}</strong>.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

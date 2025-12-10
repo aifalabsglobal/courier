@@ -22,8 +22,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Edit, Trash2, Eye, Star } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, Star, User, Loader2, Calendar, Phone, Mail } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Driver {
   id: string;
@@ -74,10 +85,20 @@ const mockDrivers: Driver[] = [
 ];
 
 export default function DriversPage() {
+  const { toast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>(mockDrivers);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  // Selected driver
+  const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+
   const [formData, setFormData] = useState({
     code: "",
     name: "",
@@ -85,7 +106,8 @@ export default function DriversPage() {
     phone: "",
     licenseNo: "",
     licenseExpiry: "",
-    rating: 0,
+    rating: 5.0,
+    isActive: true
   });
 
   const filteredDrivers = drivers.filter(
@@ -95,27 +117,36 @@ export default function DriversPage() {
       driver.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreate = () => {
-    const newDriver: Driver = {
-      id: Date.now().toString(),
-      ...formData,
-      isActive: true,
-    };
-    setDrivers([...drivers, newDriver]);
-    setIsCreateDialogOpen(false);
+  const resetForm = () => {
     setFormData({
-      code: "",
+      code: `DRV${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
       name: "",
       email: "",
       phone: "",
       licenseNo: "",
-      licenseExpiry: "",
-      rating: 0,
+      licenseExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      rating: 5.0,
+      isActive: true
     });
   };
 
+  const handleCreate = async () => {
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const newDriver: Driver = {
+      id: Date.now().toString(),
+      ...formData,
+    };
+    setDrivers([...drivers, newDriver]);
+    setIsCreateDialogOpen(false);
+    resetForm();
+    setIsLoading(false);
+    toast({ title: "Driver Added", description: `${formData.name} has been added to the system.` });
+  };
+
   const handleEdit = (driver: Driver) => {
-    setEditingDriver(driver);
+    setSelectedDriver(driver);
     setFormData({
       code: driver.code,
       name: driver.name,
@@ -124,33 +155,49 @@ export default function DriversPage() {
       licenseNo: driver.licenseNo,
       licenseExpiry: driver.licenseExpiry,
       rating: driver.rating,
+      isActive: driver.isActive
     });
+    setIsEditDialogOpen(true);
   };
 
-  const handleUpdate = () => {
-    if (editingDriver) {
-      setDrivers(
-        drivers.map((d) =>
-          d.id === editingDriver.id
-            ? { ...d, ...formData }
-            : d
-        )
-      );
-      setEditingDriver(null);
-      setFormData({
-        code: "",
-        name: "",
-        email: "",
-        phone: "",
-        licenseNo: "",
-        licenseExpiry: "",
-        rating: 0,
-      });
-    }
+  const handleUpdate = async () => {
+    if (!selectedDriver) return;
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    setDrivers(
+      drivers.map((d) =>
+        d.id === selectedDriver.id
+          ? { ...d, ...formData }
+          : d
+      )
+    );
+    setIsEditDialogOpen(false);
+    setSelectedDriver(null);
+    setIsLoading(false);
+    toast({ title: "Driver Updated", description: "Driver details have been updated." });
   };
 
-  const handleDelete = (id: string) => {
-    setDrivers(drivers.filter((d) => d.id !== id));
+  const handleView = (driver: Driver) => {
+    setSelectedDriver(driver);
+    setIsViewDialogOpen(true);
+  };
+
+  const handleDeleteClick = (driver: Driver) => {
+    setSelectedDriver(driver);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedDriver) return;
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    setDrivers(drivers.filter((d) => d.id !== selectedDriver.id));
+    setIsDeleteDialogOpen(false);
+    setSelectedDriver(null);
+    setIsLoading(false);
+    toast({ title: "Driver Deleted", description: "Driver has been removed.", variant: "destructive" });
   };
 
   const isExpiringSoon = (expiryDate: string) => {
@@ -175,6 +222,79 @@ export default function DriversPage() {
     );
   };
 
+  const stats = {
+    total: drivers.length,
+    active: drivers.filter(d => d.isActive).length,
+    expiredLicense: drivers.filter(d => isExpired(d.licenseExpiry)).length
+  };
+
+  const DriverForm = () => (
+    <div className="grid gap-4 py-4">
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Code</Label>
+        <Input
+          value={formData.code}
+          onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Name</Label>
+        <Input
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Email</Label>
+        <Input
+          type="email"
+          value={formData.email}
+          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Phone</Label>
+        <Input
+          value={formData.phone}
+          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">License No</Label>
+        <Input
+          value={formData.licenseNo}
+          onChange={(e) => setFormData({ ...formData, licenseNo: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Expiry</Label>
+        <Input
+          type="date"
+          value={formData.licenseExpiry}
+          onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Rating</Label>
+        <Input
+          type="number"
+          step="0.1"
+          min="0"
+          max="5"
+          value={formData.rating}
+          onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) })}
+          className="col-span-3"
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -182,112 +302,33 @@ export default function DriversPage() {
           <h1 className="text-3xl font-bold text-gray-900">Drivers</h1>
           <p className="text-gray-600">Manage your driver database</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Driver
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Add New Driver</DialogTitle>
-              <DialogDescription>
-                Create a new driver record. Fill in the required information.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="code" className="text-right">
-                  Code
-                </Label>
-                <Input
-                  id="code"
-                  value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">
-                  Name
-                </Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="email" className="text-right">
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="phone" className="text-right">
-                  Phone
-                </Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="licenseNo" className="text-right">
-                  License No
-                </Label>
-                <Input
-                  id="licenseNo"
-                  value={formData.licenseNo}
-                  onChange={(e) => setFormData({ ...formData, licenseNo: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="licenseExpiry" className="text-right">
-                  License Expiry
-                </Label>
-                <Input
-                  id="licenseExpiry"
-                  type="date"
-                  value={formData.licenseExpiry}
-                  onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="rating" className="text-right">
-                  Rating
-                </Label>
-                <Input
-                  id="rating"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="5"
-                  value={formData.rating}
-                  onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) })}
-                  className="col-span-3"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" onClick={handleCreate}>
-                Create Driver
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" />Add Driver
+        </Button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Drivers</CardTitle>
+            <User className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent><div className="text-2xl font-bold">{stats.total}</div></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Drivers</CardTitle>
+            <User className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent><div className="text-2xl font-bold text-green-600">{stats.active}</div></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expired Licenses</CardTitle>
+            <User className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent><div className="text-2xl font-bold text-red-600">{stats.expiredLicense}</div></CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -312,8 +353,7 @@ export default function DriversPage() {
               <TableRow>
                 <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
+                <TableHead>Contact</TableHead>
                 <TableHead>License No</TableHead>
                 <TableHead>License Expiry</TableHead>
                 <TableHead>Rating</TableHead>
@@ -326,8 +366,12 @@ export default function DriversPage() {
                 <TableRow key={driver.id}>
                   <TableCell className="font-medium">{driver.code}</TableCell>
                   <TableCell>{driver.name}</TableCell>
-                  <TableCell>{driver.email}</TableCell>
-                  <TableCell>{driver.phone}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col text-sm">
+                      <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{driver.email}</span>
+                      <span className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{driver.phone}</span>
+                    </div>
+                  </TableCell>
                   <TableCell>{driver.licenseNo}</TableCell>
                   <TableCell>
                     <Badge
@@ -335,8 +379,8 @@ export default function DriversPage() {
                         isExpired(driver.licenseExpiry)
                           ? "destructive"
                           : isExpiringSoon(driver.licenseExpiry)
-                          ? "secondary"
-                          : "default"
+                            ? "secondary"
+                            : "outline"
                       }
                     >
                       {driver.licenseExpiry}
@@ -349,16 +393,10 @@ export default function DriversPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="sm">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(driver)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(driver.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <div className="flex items-center space-x-1">
+                      <Button variant="ghost" size="sm" onClick={() => handleView(driver)}><Eye className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(driver)}><Edit className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(driver)} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -368,107 +406,114 @@ export default function DriversPage() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editingDriver} onOpenChange={() => setEditingDriver(null)}>
-        <DialogContent className="sm:max-w-[425px]">
+      {/* Create Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Driver</DialogTitle>
-            <DialogDescription>
-              Update driver information. Make sure to save your changes.
-            </DialogDescription>
+            <DialogTitle>Add New Driver</DialogTitle>
+            <DialogDescription>Create a new driver record.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-code" className="text-right">
-                Code
-              </Label>
-              <Input
-                id="edit-code"
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-name" className="text-right">
-                Name
-              </Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-email" className="text-right">
-                Email
-              </Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-phone" className="text-right">
-                Phone
-              </Label>
-              <Input
-                id="edit-phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-licenseNo" className="text-right">
-                License No
-              </Label>
-              <Input
-                id="edit-licenseNo"
-                value={formData.licenseNo}
-                onChange={(e) => setFormData({ ...formData, licenseNo: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-licenseExpiry" className="text-right">
-                License Expiry
-              </Label>
-              <Input
-                id="edit-licenseExpiry"
-                type="date"
-                value={formData.licenseExpiry}
-                onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-rating" className="text-right">
-                Rating
-              </Label>
-              <Input
-                id="edit-rating"
-                type="number"
-                step="0.1"
-                min="0"
-                max="5"
-                value={formData.rating}
-                onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) })}
-                className="col-span-3"
-              />
-            </div>
-          </div>
+          <DriverForm />
           <DialogFooter>
-            <Button type="submit" onClick={handleUpdate}>
-              Update Driver
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Driver</DialogTitle>
+            <DialogDescription>Update driver information.</DialogDescription>
+          </DialogHeader>
+          <DriverForm />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdate} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Driver Details</DialogTitle>
+            <DialogDescription>Full information for {selectedDriver?.code}</DialogDescription>
+          </DialogHeader>
+          {selectedDriver && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Name</Label>
+                  <div className="font-medium">{selectedDriver.name}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Email</Label>
+                  <div className="font-medium">{selectedDriver.email}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Phone</Label>
+                  <div className="font-medium">{selectedDriver.phone}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Rating</Label>
+                  <div className="font-medium flex items-center gap-1">{selectedDriver.rating} <Star className="h-3 w-3 fill-current text-yellow-500" /></div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">License No</Label>
+                  <div className="font-medium">{selectedDriver.licenseNo}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">License Expiry</Label>
+                  <div className={`font-medium ${isExpired(selectedDriver.licenseExpiry) ? "text-red-500" : ""}`}>
+                    {selectedDriver.licenseExpiry}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Status</Label>
+                  <Badge className="mt-1" variant={selectedDriver.isActive ? "default" : "secondary"}>
+                    {selectedDriver.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+            <Button onClick={() => { setIsViewDialogOpen(false); if (selectedDriver) handleEdit(selectedDriver); }}>
+              <Edit className="h-4 w-4 mr-2" />Edit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{selectedDriver?.name}</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

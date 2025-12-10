@@ -22,6 +22,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -30,7 +40,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Edit, Trash2, Eye, Wrench } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, Wrench, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Vehicle {
   id: string;
@@ -98,10 +109,19 @@ const vehicleTypes = [
 ];
 
 export default function VehiclesPage() {
+  const { toast } = useToast();
   const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+
   const [formData, setFormData] = useState({
     registration: "",
     make: "",
@@ -121,14 +141,7 @@ export default function VehiclesPage() {
       vehicle.model.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreate = () => {
-    const newVehicle: Vehicle = {
-      id: Date.now().toString(),
-      ...formData,
-      isActive: true,
-    };
-    setVehicles([...vehicles, newVehicle]);
-    setIsCreateDialogOpen(false);
+  const resetForm = () => {
     setFormData({
       registration: "",
       make: "",
@@ -142,8 +155,24 @@ export default function VehiclesPage() {
     });
   };
 
+  const handleCreate = async () => {
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const newVehicle: Vehicle = {
+      id: Date.now().toString(),
+      ...formData,
+      isActive: true,
+    };
+    setVehicles([...vehicles, newVehicle]);
+    setIsCreateDialogOpen(false);
+    resetForm();
+    setIsLoading(false);
+    toast({ title: "Vehicle Registered", description: "New vehicle added to master data." });
+  };
+
   const handleEdit = (vehicle: Vehicle) => {
-    setEditingVehicle(vehicle);
+    setSelectedVehicle(vehicle);
     setFormData({
       registration: vehicle.registration,
       make: vehicle.make,
@@ -155,34 +184,47 @@ export default function VehiclesPage() {
       fitnessExpiry: vehicle.fitnessExpiry,
       insuranceExpiry: vehicle.insuranceExpiry,
     });
+    setIsEditDialogOpen(true);
   };
 
-  const handleUpdate = () => {
-    if (editingVehicle) {
-      setVehicles(
-        vehicles.map((v) =>
-          v.id === editingVehicle.id
-            ? { ...v, ...formData }
-            : v
-        )
-      );
-      setEditingVehicle(null);
-      setFormData({
-        registration: "",
-        make: "",
-        model: "",
-        year: new Date().getFullYear(),
-        vehicleType: "",
-        capacityWeight: 0,
-        capacityVolume: 0,
-        fitnessExpiry: "",
-        insuranceExpiry: "",
-      });
-    }
+  const handleUpdate = async () => {
+    if (!selectedVehicle) return;
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    setVehicles(
+      vehicles.map((v) =>
+        v.id === selectedVehicle.id
+          ? { ...v, ...formData }
+          : v
+      )
+    );
+    setIsEditDialogOpen(false);
+    setSelectedVehicle(null);
+    setIsLoading(false);
+    toast({ title: "Vehicle Updated", description: "Vehicle details saved." });
   };
 
-  const handleDelete = (id: string) => {
-    setVehicles(vehicles.filter((v) => v.id !== id));
+  const handleView = (vehicle: Vehicle) => {
+    setSelectedVehicle(vehicle);
+    setIsViewDialogOpen(true);
+  };
+
+  const handleDeleteClick = (vehicle: Vehicle) => {
+    setSelectedVehicle(vehicle);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedVehicle) return;
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    setVehicles(vehicles.filter((v) => v.id !== selectedVehicle.id));
+    setIsDeleteDialogOpen(false);
+    setSelectedVehicle(null);
+    setIsLoading(false);
+    toast({ title: "Vehicle Deleted", description: "Vehicle removed from master data.", variant: "destructive" });
   };
 
   const isExpiringSoon = (expiryDate: string) => {
@@ -198,156 +240,124 @@ export default function VehiclesPage() {
     return expiry < today;
   };
 
+  const VehicleForm = () => (
+    <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="registration" className="text-right">Registration</Label>
+        <Input
+          id="registration"
+          value={formData.registration}
+          onChange={(e) => setFormData({ ...formData, registration: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="make" className="text-right">Make</Label>
+        <Input
+          id="make"
+          value={formData.make}
+          onChange={(e) => setFormData({ ...formData, make: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="model" className="text-right">Model</Label>
+        <Input
+          id="model"
+          value={formData.model}
+          onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="year" className="text-right">Year</Label>
+        <Input
+          id="year"
+          type="number"
+          value={formData.year}
+          onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="vehicleType" className="text-right">Type</Label>
+        <Select
+          value={formData.vehicleType}
+          onValueChange={(value) => setFormData({ ...formData, vehicleType: value })}
+        >
+          <SelectTrigger className="col-span-3">
+            <SelectValue placeholder="Select vehicle type" />
+          </SelectTrigger>
+          <SelectContent>
+            {vehicleTypes.map((type) => (
+              <SelectItem key={type} value={type}>
+                {type}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="capacityWeight" className="text-right">Weight (kg)</Label>
+        <Input
+          id="capacityWeight"
+          type="number"
+          value={formData.capacityWeight}
+          onChange={(e) => setFormData({ ...formData, capacityWeight: parseFloat(e.target.value) })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="capacityVolume" className="text-right">Volume (m³)</Label>
+        <Input
+          id="capacityVolume"
+          type="number"
+          value={formData.capacityVolume}
+          onChange={(e) => setFormData({ ...formData, capacityVolume: parseFloat(e.target.value) })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="fitnessExpiry" className="text-right">Fitness Exp.</Label>
+        <Input
+          id="fitnessExpiry"
+          type="date"
+          value={formData.fitnessExpiry}
+          onChange={(e) => setFormData({ ...formData, fitnessExpiry: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="insuranceExpiry" className="text-right">Ins. Exp.</Label>
+        <Input
+          id="insuranceExpiry"
+          type="date"
+          value={formData.insuranceExpiry}
+          onChange={(e) => setFormData({ ...formData, insuranceExpiry: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Vehicles</h1>
-          <p className="text-gray-600">Manage your vehicle fleet</p>
+          <p className="text-gray-600">Master data registry for vehicle fleet</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Vehicle
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Add New Vehicle</DialogTitle>
-              <DialogDescription>
-                Create a new vehicle record. Fill in the required information.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="registration" className="text-right">
-                  Registration
-                </Label>
-                <Input
-                  id="registration"
-                  value={formData.registration}
-                  onChange={(e) => setFormData({ ...formData, registration: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="make" className="text-right">
-                  Make
-                </Label>
-                <Input
-                  id="make"
-                  value={formData.make}
-                  onChange={(e) => setFormData({ ...formData, make: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="model" className="text-right">
-                  Model
-                </Label>
-                <Input
-                  id="model"
-                  value={formData.model}
-                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="year" className="text-right">
-                  Year
-                </Label>
-                <Input
-                  id="year"
-                  type="number"
-                  value={formData.year}
-                  onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="vehicleType" className="text-right">
-                  Type
-                </Label>
-                <Select
-                  value={formData.vehicleType}
-                  onValueChange={(value) => setFormData({ ...formData, vehicleType: value })}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select vehicle type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicleTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="capacityWeight" className="text-right">
-                  Weight Capacity (kg)
-                </Label>
-                <Input
-                  id="capacityWeight"
-                  type="number"
-                  value={formData.capacityWeight}
-                  onChange={(e) => setFormData({ ...formData, capacityWeight: parseFloat(e.target.value) })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="capacityVolume" className="text-right">
-                  Volume Capacity (m³)
-                </Label>
-                <Input
-                  id="capacityVolume"
-                  type="number"
-                  value={formData.capacityVolume}
-                  onChange={(e) => setFormData({ ...formData, capacityVolume: parseFloat(e.target.value) })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="fitnessExpiry" className="text-right">
-                  Fitness Expiry
-                </Label>
-                <Input
-                  id="fitnessExpiry"
-                  type="date"
-                  value={formData.fitnessExpiry}
-                  onChange={(e) => setFormData({ ...formData, fitnessExpiry: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="insuranceExpiry" className="text-right">
-                  Insurance Expiry
-                </Label>
-                <Input
-                  id="insuranceExpiry"
-                  type="date"
-                  value={formData.insuranceExpiry}
-                  onChange={(e) => setFormData({ ...formData, insuranceExpiry: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" onClick={handleCreate}>
-                Create Vehicle
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Vehicle
+        </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Vehicle Fleet</CardTitle>
+          <CardTitle>Vehicle Registry</CardTitle>
           <CardDescription>
-            A list of all vehicles in your fleet including their specifications and status.
+            A list of all vehicles in your fleet including their specifications.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -393,8 +403,8 @@ export default function VehiclesPage() {
                         isExpired(vehicle.fitnessExpiry)
                           ? "destructive"
                           : isExpiringSoon(vehicle.fitnessExpiry)
-                          ? "secondary"
-                          : "default"
+                            ? "secondary"
+                            : "outline"
                       }
                     >
                       {vehicle.fitnessExpiry}
@@ -406,8 +416,8 @@ export default function VehiclesPage() {
                         isExpired(vehicle.insuranceExpiry)
                           ? "destructive"
                           : isExpiringSoon(vehicle.insuranceExpiry)
-                          ? "secondary"
-                          : "default"
+                            ? "secondary"
+                            : "outline"
                       }
                     >
                       {vehicle.insuranceExpiry}
@@ -420,16 +430,13 @@ export default function VehiclesPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" onClick={() => handleView(vehicle)}>
                         <Eye className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleEdit(vehicle)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
-                        <Wrench className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(vehicle.id)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(vehicle)} className="text-red-600">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -441,137 +448,125 @@ export default function VehiclesPage() {
         </CardContent>
       </Card>
 
+      {/* Create Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add New Vehicle</DialogTitle>
+            <DialogDescription>
+              Create a new vehicle record in master data.
+            </DialogDescription>
+          </DialogHeader>
+          <VehicleForm />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Vehicle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Dialog */}
-      <Dialog open={!!editingVehicle} onOpenChange={() => setEditingVehicle(null)}>
-        <DialogContent className="sm:max-w-[425px]">
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Edit Vehicle</DialogTitle>
             <DialogDescription>
-              Update vehicle information. Make sure to save your changes.
+              Update vehicle information.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-registration" className="text-right">
-                Registration
-              </Label>
-              <Input
-                id="edit-registration"
-                value={formData.registration}
-                onChange={(e) => setFormData({ ...formData, registration: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-make" className="text-right">
-                Make
-              </Label>
-              <Input
-                id="edit-make"
-                value={formData.make}
-                onChange={(e) => setFormData({ ...formData, make: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-model" className="text-right">
-                Model
-              </Label>
-              <Input
-                id="edit-model"
-                value={formData.model}
-                onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-year" className="text-right">
-                Year
-              </Label>
-              <Input
-                id="edit-year"
-                type="number"
-                value={formData.year}
-                onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-vehicleType" className="text-right">
-                Type
-              </Label>
-              <Select
-                value={formData.vehicleType}
-                onValueChange={(value) => setFormData({ ...formData, vehicleType: value })}
-              >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select vehicle type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vehicleTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-capacityWeight" className="text-right">
-                Weight Capacity (kg)
-              </Label>
-              <Input
-                id="edit-capacityWeight"
-                type="number"
-                value={formData.capacityWeight}
-                onChange={(e) => setFormData({ ...formData, capacityWeight: parseFloat(e.target.value) })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-capacityVolume" className="text-right">
-                Volume Capacity (m³)
-              </Label>
-              <Input
-                id="edit-capacityVolume"
-                type="number"
-                value={formData.capacityVolume}
-                onChange={(e) => setFormData({ ...formData, capacityVolume: parseFloat(e.target.value) })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-fitnessExpiry" className="text-right">
-                Fitness Expiry
-              </Label>
-              <Input
-                id="edit-fitnessExpiry"
-                type="date"
-                value={formData.fitnessExpiry}
-                onChange={(e) => setFormData({ ...formData, fitnessExpiry: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-insuranceExpiry" className="text-right">
-                Insurance Expiry
-              </Label>
-              <Input
-                id="edit-insuranceExpiry"
-                type="date"
-                value={formData.insuranceExpiry}
-                onChange={(e) => setFormData({ ...formData, insuranceExpiry: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-          </div>
+          <VehicleForm />
           <DialogFooter>
-            <Button type="submit" onClick={handleUpdate}>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdate} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Update Vehicle
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* View Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Vehicle Details</DialogTitle>
+            <DialogDescription>{selectedVehicle?.registration}</DialogDescription>
+          </DialogHeader>
+          {selectedVehicle && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Make / Model</Label>
+                  <div className="font-medium">{selectedVehicle.make} {selectedVehicle.model}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Year</Label>
+                  <div className="font-medium">{selectedVehicle.year}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Type</Label>
+                  <div className="font-medium">{selectedVehicle.vehicleType}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Status</Label>
+                  <Badge variant={selectedVehicle.isActive ? "default" : "secondary"}>{selectedVehicle.isActive ? "Active" : "Inactive"}</Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Capacity (Weight)</Label>
+                  <div className="font-medium">{selectedVehicle.capacityWeight} kg</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Capacity (Volume)</Label>
+                  <div className="font-medium">{selectedVehicle.capacityVolume} m³</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Fitness Expiry</Label>
+                  <div className="font-medium text-sm">{selectedVehicle.fitnessExpiry}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Insurance Expiry</Label>
+                  <div className="font-medium text-sm">{selectedVehicle.insuranceExpiry}</div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+            <Button onClick={() => { setIsViewDialogOpen(false); if (selectedVehicle) handleEdit(selectedVehicle); }}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{selectedVehicle?.registration}</strong> from the registry.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

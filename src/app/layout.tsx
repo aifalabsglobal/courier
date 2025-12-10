@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { ClerkProvider } from "@clerk/nextjs";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,22 +15,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Logistics ERP - Enterprise Transportation Management",
+  title: "Courier - Fast & Reliable Logistics",
   description: "Comprehensive logistics ERP system for transportation, warehouse, and fleet management",
-  keywords: ["Logistics", "ERP", "Transportation", "Warehouse", "Fleet", "TMS", "WMS"],
-  authors: [{ name: "Logistics ERP Team" }],
+  keywords: ["Logistics", "ERP", "Transportation", "Warehouse", "Fleet", "TMS", "WMS", "Courier"],
+  authors: [{ name: "AIFA Labs Global" }],
   icons: {
     icon: "/logo.svg",
   },
   openGraph: {
-    title: "Logistics ERP",
-    description: "Comprehensive logistics management system",
+    title: "Courier Logistics",
+    description: "Fast & reliable courier and logistics services",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Logistics ERP",
-    description: "Comprehensive logistics management system",
+    title: "Courier Logistics",
+    description: "Fast & reliable courier and logistics services",
   },
 };
 
@@ -39,13 +40,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
-      >
-        {children}
-        <Toaster />
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" suppressHydrationWarning>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        >
+          {children}
+          <Toaster />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
+

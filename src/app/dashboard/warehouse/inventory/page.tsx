@@ -22,6 +22,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -30,7 +40,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Edit, Trash2, Package, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, AlertTriangle, TrendingUp, TrendingDown, Eye, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Inventory {
   id: string;
@@ -121,13 +132,24 @@ const mockInventory: Inventory[] = [
 const inventoryStatuses = ["AVAILABLE", "RESERVED", "DAMAGED", "QUARANTINE"];
 
 export default function InventoryPage() {
+  const { toast } = useToast();
   const [inventory, setInventory] = useState<Inventory[]>(mockInventory);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const [selectedItem, setSelectedItem] = useState<Inventory | null>(null);
+
   const [formData, setFormData] = useState({
     warehouseName: "",
     locationCode: "",
     skuCode: "",
+    skuName: "",
     batchNo: "",
     quantity: 0,
     reservedQty: 0,
@@ -143,13 +165,30 @@ export default function InventoryPage() {
       item.warehouseName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreate = () => {
+  const resetForm = () => {
+    setFormData({
+      warehouseName: "",
+      locationCode: "",
+      skuCode: "",
+      skuName: "",
+      batchNo: "",
+      quantity: 0,
+      reservedQty: 0,
+      status: "AVAILABLE",
+      expiryDate: "",
+    });
+  };
+
+  const handleCreate = async () => {
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     const newItem: Inventory = {
       id: Date.now().toString(),
       warehouseName: formData.warehouseName,
       locationCode: formData.locationCode,
       skuCode: formData.skuCode,
-      skuName: formData.skuCode, // In real app, fetch from SKU master
+      skuName: formData.skuName || formData.skuCode,
       batchNo: formData.batchNo,
       quantity: formData.quantity,
       reservedQty: formData.reservedQty,
@@ -161,48 +200,97 @@ export default function InventoryPage() {
     setInventory([...inventory, newItem]);
     setIsCreateDialogOpen(false);
     resetForm();
+    setIsLoading(false);
+    toast({ title: "Inventory Added", description: "New stock item added successfully." });
   };
 
-  const handleAdjustment = (id: string, adjustment: number) => {
+  const handleEdit = (item: Inventory) => {
+    setSelectedItem(item);
+    setFormData({
+      warehouseName: item.warehouseName,
+      locationCode: item.locationCode,
+      skuCode: item.skuCode,
+      skuName: item.skuName,
+      batchNo: item.batchNo,
+      quantity: item.quantity,
+      reservedQty: item.reservedQty,
+      status: item.status,
+      expiryDate: item.expiryDate || "",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!selectedItem) return;
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const availableQty = formData.quantity - formData.reservedQty;
+
+    setInventory(
+      inventory.map((item) =>
+        item.id === selectedItem.id
+          ? {
+            ...item,
+            ...formData,
+            availableQty,
+          }
+          : item
+      )
+    );
+    setIsEditDialogOpen(false);
+    setSelectedItem(null);
+    setIsLoading(false);
+    toast({ title: "Inventory Updated", description: "Stock details updated." });
+  };
+
+  const handleDeleteClick = (item: Inventory) => {
+    setSelectedItem(item);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedItem) return;
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setInventory(inventory.filter((item) => item.id !== selectedItem.id));
+    setIsDeleteDialogOpen(false);
+    setSelectedItem(null);
+    setIsLoading(false);
+    toast({ title: "Inventory Removed", description: "Item removed from inventory.", variant: "destructive" });
+  };
+
+  const handleView = (item: Inventory) => {
+    setSelectedItem(item);
+    setIsViewDialogOpen(true);
+  };
+
+  const handleAdjustment = async (id: string, adjustment: number) => {
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 200));
     setInventory(
       inventory.map((item) =>
         item.id === id
           ? {
-              ...item,
-              quantity: item.quantity + adjustment,
-              availableQty: item.availableQty + adjustment,
-              lastCountedAt: new Date().toISOString().split('T')[0],
-            }
+            ...item,
+            quantity: item.quantity + adjustment,
+            availableQty: (item.quantity + adjustment) - item.reservedQty,
+            lastCountedAt: new Date().toISOString().split('T')[0],
+          }
           : item
       )
     );
-  };
-
-  const resetForm = () => {
-    setFormData({
-      warehouseName: "",
-      locationCode: "",
-      skuCode: "",
-      batchNo: "",
-      quantity: 0,
-      reservedQty: 0,
-      status: "AVAILABLE",
-      expiryDate: "",
-    });
+    setIsLoading(false);
+    toast({ title: "Stock Adjusted", description: `Quantity adjusted by ${adjustment}.` });
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "AVAILABLE":
-        return "default";
-      case "RESERVED":
-        return "secondary";
-      case "DAMAGED":
-        return "destructive";
-      case "QUARANTINE":
-        return "destructive";
-      default:
-        return "outline";
+      case "AVAILABLE": return "default";
+      case "RESERVED": return "secondary";
+      case "DAMAGED": return "destructive";
+      case "QUARANTINE": return "destructive";
+      default: return "outline";
     }
   };
 
@@ -227,6 +315,102 @@ export default function InventoryPage() {
   const expiringItems = inventory.filter(item => isExpiringSoon(item.expiryDate)).length;
   const expiredItems = inventory.filter(item => isExpired(item.expiryDate)).length;
 
+  const InventoryForm = () => (
+    <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="warehouseName">Warehouse</Label>
+          <Input
+            id="warehouseName"
+            value={formData.warehouseName}
+            onChange={(e) => setFormData({ ...formData, warehouseName: e.target.value })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="locationCode">Location</Label>
+          <Input
+            id="locationCode"
+            value={formData.locationCode}
+            onChange={(e) => setFormData({ ...formData, locationCode: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="skuCode">SKU Code</Label>
+          <Input
+            id="skuCode"
+            value={formData.skuCode}
+            onChange={(e) => setFormData({ ...formData, skuCode: e.target.value })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="skuName">SKU Name</Label>
+          <Input
+            id="skuName"
+            value={formData.skuName}
+            onChange={(e) => setFormData({ ...formData, skuName: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="batchNo">Batch</Label>
+          <Input
+            id="batchNo"
+            value={formData.batchNo}
+            onChange={(e) => setFormData({ ...formData, batchNo: e.target.value })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="quantity">Total Qty</Label>
+          <Input
+            id="quantity"
+            type="number"
+            value={formData.quantity}
+            onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
+          />
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="reservedQty">Reserved</Label>
+          <Input
+            id="reservedQty"
+            type="number"
+            value={formData.reservedQty}
+            onChange={(e) => setFormData({ ...formData, reservedQty: parseInt(e.target.value) })}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid items-center gap-2">
+          <Label htmlFor="status">Status</Label>
+          <Select
+            value={formData.status}
+            onValueChange={(value) => setFormData({ ...formData, status: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              {inventoryStatuses.map((status) => (
+                <SelectItem key={status} value={status}>{status}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid items-center gap-2">
+          <Label htmlFor="expiryDate">Expiry Date</Label>
+          <Input
+            id="expiryDate"
+            type="date"
+            value={formData.expiryDate}
+            onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -234,115 +418,10 @@ export default function InventoryPage() {
           <h1 className="text-3xl font-bold text-gray-900">Inventory</h1>
           <p className="text-gray-600">Manage warehouse inventory and stock levels</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Stock
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Add Inventory</DialogTitle>
-              <DialogDescription>
-                Add new stock to warehouse inventory.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="warehouseName">Warehouse</Label>
-                  <Input
-                    id="warehouseName"
-                    value={formData.warehouseName}
-                    onChange={(e) => setFormData({ ...formData, warehouseName: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="locationCode">Location Code</Label>
-                  <Input
-                    id="locationCode"
-                    placeholder="A-01-01"
-                    value={formData.locationCode}
-                    onChange={(e) => setFormData({ ...formData, locationCode: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="skuCode">SKU Code</Label>
-                  <Input
-                    id="skuCode"
-                    value={formData.skuCode}
-                    onChange={(e) => setFormData({ ...formData, skuCode: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="batchNo">Batch No</Label>
-                  <Input
-                    id="batchNo"
-                    value={formData.batchNo}
-                    onChange={(e) => setFormData({ ...formData, batchNo: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="quantity">Quantity</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="reservedQty">Reserved Qty</Label>
-                  <Input
-                    id="reservedQty"
-                    type="number"
-                    value={formData.reservedQty}
-                    onChange={(e) => setFormData({ ...formData, reservedQty: parseInt(e.target.value) })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => setFormData({ ...formData, status: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {inventoryStatuses.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="expiryDate">Expiry Date</Label>
-                  <Input
-                    id="expiryDate"
-                    type="date"
-                    value={formData.expiryDate}
-                    onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" onClick={handleCreate}>
-                Add Stock
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Stock
+        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -354,7 +433,7 @@ export default function InventoryPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalValue.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Total quantity across all warehouses</p>
+            <p className="text-xs text-muted-foreground">Total quantity</p>
           </CardContent>
         </Card>
         <Card>
@@ -364,7 +443,7 @@ export default function InventoryPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{totalAvailable.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Available for allocation</p>
+            <p className="text-xs text-muted-foreground">For allocation</p>
           </CardContent>
         </Card>
         <Card>
@@ -374,7 +453,7 @@ export default function InventoryPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">{totalReserved.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Reserved for orders</p>
+            <p className="text-xs text-muted-foreground">For orders</p>
           </CardContent>
         </Card>
         <Card>
@@ -419,35 +498,36 @@ export default function InventoryPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Warehouse</TableHead>
-                <TableHead>Location</TableHead>
                 <TableHead>SKU</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Batch</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Available</TableHead>
-                <TableHead>Reserved</TableHead>
+                <TableHead>Warehouse / Location</TableHead>
+                <TableHead>Stats</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Expiry</TableHead>
+                <TableHead>Quick Adj.</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredInventory.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>{item.warehouseName}</TableCell>
-                  <TableCell className="font-medium">{item.locationCode}</TableCell>
-                  <TableCell className="font-medium">{item.skuCode}</TableCell>
-                  <TableCell>{item.skuName}</TableCell>
-                  <TableCell>{item.batchNo}</TableCell>
                   <TableCell>
-                    <div className="font-medium">{item.quantity}</div>
+                    <div>
+                      <div className="font-medium">{item.skuCode}</div>
+                      <div className="text-xs text-muted-foreground max-w-[150px] truncate" title={item.skuName}>{item.skuName}</div>
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <div className="text-green-600 font-medium">{item.availableQty}</div>
+                    <div className="text-sm">
+                      <div>{item.warehouseName}</div>
+                      <div className="font-mono text-xs text-muted-foreground">{item.locationCode}</div>
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <div className="text-yellow-600">{item.reservedQty}</div>
+                    <div className="text-xs space-y-1">
+                      <div className="flex justify-between w-24"><span>Total:</span> <span className="font-bold">{item.quantity}</span></div>
+                      <div className="flex justify-between w-24 text-green-600"><span>Avail:</span> <span className="font-bold">{item.availableQty}</span></div>
+                      <div className="flex justify-between w-24 text-yellow-600"><span>Res:</span> <span className="font-bold">{item.reservedQty}</span></div>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(item.status)}>
@@ -455,35 +535,44 @@ export default function InventoryPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {item.expiryDate && (
-                      <Badge
-                        variant={
-                          isExpired(item.expiryDate)
-                            ? "destructive"
-                            : isExpiringSoon(item.expiryDate)
-                            ? "secondary"
-                            : "outline"
-                        }
-                      >
+                    {item.expiryDate ? (
+                      <div className={`text-xs ${isExpired(item.expiryDate) ? "text-red-600 font-bold" : isExpiringSoon(item.expiryDate) ? "text-orange-600" : ""}`}>
                         {item.expiryDate}
-                      </Badge>
-                    )}
+                      </div>
+                    ) : <span className="text-xs text-muted-foreground">-</span>}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1">
                       <Button
                         variant="ghost"
-                        size="sm"
-                        onClick={() => handleAdjustment(item.id, 10)}
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => handleAdjustment(item.id, 1)}
+                        title="Add 1"
                       >
-                        <TrendingUp className="h-4 w-4 text-green-500" />
+                        <TrendingUp className="h-3 w-3 text-green-500" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        onClick={() => handleAdjustment(item.id, -10)}
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => handleAdjustment(item.id, -1)}
+                        title="Remove 1"
                       >
-                        <TrendingDown className="h-4 w-4 text-red-500" />
+                        <TrendingDown className="h-3 w-3 text-red-500" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center space-x-1">
+                      <Button variant="ghost" size="sm" onClick={() => handleView(item)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(item)} className="text-red-600">
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
@@ -493,6 +582,120 @@ export default function InventoryPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Create Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Add Inventory</DialogTitle>
+            <DialogDescription>Add new stock item.</DialogDescription>
+          </DialogHeader>
+          <InventoryForm />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Add Stock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit Inventory</DialogTitle>
+            <DialogDescription>Update stock details.</DialogDescription>
+          </DialogHeader>
+          <InventoryForm />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdate} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Update Stock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Inventory Details</DialogTitle>
+            <DialogDescription>{selectedItem?.skuCode}</DialogDescription>
+          </DialogHeader>
+          {selectedItem && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Details</div>
+                  <div className="font-bold text-lg">{selectedItem.skuName}</div>
+                  <div className="text-sm text-muted-foreground">SKU: {selectedItem.skuCode}</div>
+                  <div className="text-sm text-muted-foreground">Batch: {selectedItem.batchNo}</div>
+                </div>
+                <div className="text-right">
+                  <Badge variant={getStatusColor(selectedItem.status)}>{selectedItem.status}</Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 border-t pt-4">
+                <div className="text-center p-2 bg-muted rounded">
+                  <div className="text-sm font-medium text-muted-foreground">Total</div>
+                  <div className="font-bold text-xl">{selectedItem.quantity}</div>
+                </div>
+                <div className="text-center p-2 bg-green-50 rounded border border-green-100">
+                  <div className="text-sm font-medium text-green-700">Available</div>
+                  <div className="font-bold text-xl text-green-700">{selectedItem.availableQty}</div>
+                </div>
+                <div className="text-center p-2 bg-yellow-50 rounded border border-yellow-100">
+                  <div className="text-sm font-medium text-yellow-700">Reserved</div>
+                  <div className="font-bold text-xl text-yellow-700">{selectedItem.reservedQty}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Location</div>
+                  <div>{selectedItem.warehouseName}</div>
+                  <div className="font-mono text-sm">{selectedItem.locationCode}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Dates</div>
+                  <div className="text-sm">Last Count: {selectedItem.lastCountedAt}</div>
+                  {selectedItem.expiryDate && <div className="text-sm text-red-600">Expires: {selectedItem.expiryDate}</div>}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+            <Button onClick={() => { setIsViewDialogOpen(false); if (selectedItem) handleEdit(selectedItem); }}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Inventory?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove <strong>{selectedItem?.skuCode}</strong> from <strong>{selectedItem?.warehouseName}</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
