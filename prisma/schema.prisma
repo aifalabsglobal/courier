@@ -133,6 +133,10 @@ model Customer {
   orders  Order[]
   invoices Invoice[]
 
+  @@index([companyId])
+  @@index([name])
+  @@index([isActive])
+  @@index([createdAt])
   @@map("customers")
 }
 
@@ -388,6 +392,11 @@ model Order {
   invoices  InvoiceLine[]
   trackingEvents TrackingEvent[]
 
+  @@index([companyId])
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([orderType])
   @@map("orders")
 }
 

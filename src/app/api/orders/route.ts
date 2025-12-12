@@ -1,22 +1,63 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@clerk/nextjs/server";
+import { getPaginationParams, createPaginatedResponse } from "@/lib/pagination";
+import { apiCache, getCacheHeaders } from "@/lib/cache";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
         const { userId } = await auth();
         if (!userId) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        // Get all orders without company filter for now
-        const orders = await db.order.findMany({
-            include: { customer: true },
-            orderBy: { createdAt: 'desc' }
-        });
+        const { searchParams } = new URL(req.url);
+        const pagination = getPaginationParams(req);
+        const status = searchParams.get('status');
+        const search = searchParams.get('search');
 
-        console.log("[ORDERS_GET] Found orders:", orders.length);
-        return NextResponse.json(orders);
+        // Build cache key
+        const cacheKey = `orders:${pagination.page}:${pagination.limit}:${status || 'all'}:${search || ''}`;
+
+        // Check cache first
+        const cached = apiCache.get<{ data: unknown[]; total: number }>(cacheKey);
+        if (cached) {
+            return NextResponse.json(
+                createPaginatedResponse(cached.data, cached.total, pagination),
+                { headers: getCacheHeaders(30) }
+            );
+        }
+
+        // Build where clause
+        const where: Record<string, unknown> = {};
+        if (status) where.status = status;
+        if (search) {
+            where.OR = [
+                { orderNo: { contains: search, mode: 'insensitive' } },
+                { shipperName: { contains: search, mode: 'insensitive' } },
+                { consigneeName: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+
+        // Get total count and data in parallel
+        const [total, orders] = await Promise.all([
+            db.order.count({ where }),
+            db.order.findMany({
+                where,
+                include: { customer: { select: { id: true, name: true, code: true } } },
+                orderBy: { createdAt: 'desc' },
+                skip: pagination.skip,
+                take: pagination.limit,
+            }),
+        ]);
+
+        // Cache the result
+        apiCache.set(cacheKey, { data: orders, total }, 60);
+
+        return NextResponse.json(
+            createPaginatedResponse(orders, total, pagination),
+            { headers: getCacheHeaders(30) }
+        );
     } catch (error) {
         console.error("[ORDERS_GET]", error);
         return new NextResponse("Internal Error", { status: 500 });
@@ -69,6 +110,9 @@ export async function POST(req: Request) {
             },
             include: { customer: true }
         });
+
+        // Invalidate orders cache
+        apiCache.invalidate('orders');
 
         return NextResponse.json(order);
     } catch (error) {

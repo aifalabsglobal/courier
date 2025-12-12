@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Edit, Trash2, Package, Eye, Loader2, MapPin, Printer } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, Eye, Loader2, MapPin, Printer, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 
@@ -32,6 +32,15 @@ interface Customer {
   name: string;
 }
 
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
 export default function OrdersPage() {
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -44,6 +53,7 @@ export default function OrdersPage() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false });
 
   const [formData, setFormData] = useState({
     customerId: "", orderType: "FTL", priority: "NORMAL", status: "DRAFT",
@@ -51,21 +61,48 @@ export default function OrdersPage() {
     totalWeight: "", packageCount: "", description: ""
   });
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (page = 1, search = "") => {
     try {
-      const [ordersRes, customersRes] = await Promise.all([fetch("/api/orders"), fetch("/api/customers")]);
-      if (ordersRes.ok) setOrders(await ordersRes.json());
-      if (customersRes.ok) setCustomers(await customersRes.json());
+      setIsPageLoading(true);
+      const params = new URLSearchParams({ page: page.toString(), limit: "20" });
+      if (search) params.set('search', search);
+
+      const [ordersRes, customersRes] = await Promise.all([
+        fetch(`/api/orders?${params}`),
+        fetch("/api/customers?all=true")
+      ]);
+
+      if (ordersRes.ok) {
+        const data = await ordersRes.json();
+        // Handle both paginated and non-paginated responses
+        if (data.data) {
+          setOrders(data.data);
+          setPagination(data.pagination);
+        } else {
+          setOrders(Array.isArray(data) ? data : []);
+        }
+      }
+      if (customersRes.ok) {
+        const custData = await customersRes.json();
+        setCustomers(Array.isArray(custData) ? custData : custData.data || []);
+      }
     } catch { toast({ title: "Error", description: "Failed to load orders", variant: "destructive" }); }
     finally { setIsPageLoading(false); }
   };
 
   useEffect(() => { fetchOrders(); }, []);
 
-  const filteredOrders = orders.filter(o =>
-    o.orderNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (o.customer?.name && o.customer.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm !== undefined) fetchOrders(1, searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const handlePageChange = (newPage: number) => {
+    fetchOrders(newPage, searchTerm);
+  };
 
   const resetForm = () => setFormData({ customerId: "", orderType: "FTL", priority: "NORMAL", status: "DRAFT", shipperName: "", shipperCity: "", consigneeName: "", consigneeCity: "", totalWeight: "", packageCount: "", description: "" });
 
@@ -159,33 +196,51 @@ export default function OrdersPage() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Order List</CardTitle><CardDescription>All orders</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Order List</CardTitle><CardDescription>All orders {pagination.total > 0 && `(${pagination.total} total)`}</CardDescription></CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-2 mb-4"><Search className="h-4 w-4 text-gray-400" /><Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm" /></div>
+          <div className="flex items-center space-x-2 mb-4"><Search className="h-4 w-4 text-gray-400" /><Input placeholder="Search orders..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm" /></div>
           {isPageLoading ? <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div> : (
-            <Table>
-              <TableHeader><TableRow><TableHead>Order No</TableHead><TableHead>Customer</TableHead><TableHead>Route</TableHead><TableHead>Weight</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {filteredOrders.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center h-24">No orders found.</TableCell></TableRow> :
-                  filteredOrders.map((o) => (
-                    <TableRow key={o.id}>
-                      <TableCell className="font-medium">{o.orderNo}</TableCell>
-                      <TableCell>{o.customer?.name || "-"}</TableCell>
-                      <TableCell><div className="flex items-center gap-1"><MapPin className="h-3 w-3" />{o.shipperCity || "-"} → {o.consigneeCity || "-"}</div></TableCell>
-                      <TableCell>{o.totalWeight} kg</TableCell>
-                      <TableCell><Badge variant={getStatusColor(o.status)}>{o.status}</Badge></TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1">
-                          <Button variant="ghost" size="sm" onClick={() => { setSelectedOrder(o); setIsViewDialogOpen(true); }}><Eye className="h-4 w-4" /></Button>
-                          <Link href={`/dashboard/orders/waybill/${o.id}`}><Button variant="ghost" size="sm" title="Print Waybill"><Printer className="h-4 w-4" /></Button></Link>
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(o)}><Edit className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="sm" onClick={() => { setSelectedOrder(o); setIsDeleteDialogOpen(true); }} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
+            <>
+              <Table>
+                <TableHeader><TableRow><TableHead>Order No</TableHead><TableHead>Customer</TableHead><TableHead>Route</TableHead><TableHead>Weight</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {orders.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center h-24">No orders found.</TableCell></TableRow> :
+                    orders.map((o) => (
+                      <TableRow key={o.id}>
+                        <TableCell className="font-medium">{o.orderNo}</TableCell>
+                        <TableCell>{o.customer?.name || "-"}</TableCell>
+                        <TableCell><div className="flex items-center gap-1"><MapPin className="h-3 w-3" />{o.shipperCity || "-"} → {o.consigneeCity || "-"}</div></TableCell>
+                        <TableCell>{o.totalWeight} kg</TableCell>
+                        <TableCell><Badge variant={getStatusColor(o.status)}>{o.status}</Badge></TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-1">
+                            <Button variant="ghost" size="sm" onClick={() => { setSelectedOrder(o); setIsViewDialogOpen(true); }}><Eye className="h-4 w-4" /></Button>
+                            <Link href={`/dashboard/orders/waybill/${o.id}`}><Button variant="ghost" size="sm" title="Print Waybill"><Printer className="h-4 w-4" /></Button></Link>
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(o)}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => { setSelectedOrder(o); setIsDeleteDialogOpen(true); }} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+              {/* Pagination Controls */}
+              {pagination.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <div className="text-sm text-gray-600">
+                    Page {pagination.page} of {pagination.totalPages} ({pagination.total} items)
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handlePageChange(pagination.page - 1)} disabled={!pagination.hasPrev}>
+                      <ChevronLeft className="h-4 w-4" /> Previous
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handlePageChange(pagination.page + 1)} disabled={!pagination.hasNext}>
+                      Next <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
