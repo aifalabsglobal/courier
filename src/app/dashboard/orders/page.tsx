@@ -1,705 +1,199 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Edit, Trash2, Eye, Package, Calendar } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, Eye, Loader2, MapPin, Printer } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 interface Order {
   id: string;
   orderNo: string;
-  customerName: string;
-  orderType: string;
   status: string;
   priority: string;
-  pickupDate: string;
-  deliveryDate: string;
+  shipperCity: string | null;
+  consigneeCity: string | null;
   totalWeight: number;
-  totalVolume: number;
-  totalValue: number;
-  freightCharge: number;
-  totalCharges: number;
-  shipperCity: string;
-  consigneeCity: string;
+  packageCount: number;
+  customer?: { name: string };
+  createdAt: string;
 }
 
-const mockOrders: Order[] = [
-  {
-    id: "1",
-    orderNo: "ORD-2024-001",
-    customerName: "Acme Corporation",
-    orderType: "FTL",
-    status: "CONFIRMED",
-    priority: "HIGH",
-    pickupDate: "2024-01-15",
-    deliveryDate: "2024-01-17",
-    totalWeight: 15000,
-    totalVolume: 25,
-    totalValue: 25000,
-    freightCharge: 1200,
-    totalCharges: 1350,
-    shipperCity: "New York",
-    consigneeCity: "Boston",
-  },
-  {
-    id: "2",
-    orderNo: "ORD-2024-002",
-    customerName: "Global Logistics",
-    orderType: "LTL",
-    status: "DISPATCHED",
-    priority: "NORMAL",
-    pickupDate: "2024-01-14",
-    deliveryDate: "2024-01-16",
-    totalWeight: 8500,
-    totalVolume: 15,
-    totalValue: 12000,
-    freightCharge: 800,
-    totalCharges: 920,
-    shipperCity: "Los Angeles",
-    consigneeCity: "San Francisco",
-  },
-  {
-    id: "3",
-    orderNo: "ORD-2024-003",
-    customerName: "Fast Shipping Co",
-    orderType: "PARCEL",
-    status: "DELIVERED",
-    priority: "URGENT",
-    pickupDate: "2024-01-13",
-    deliveryDate: "2024-01-14",
-    totalWeight: 500,
-    totalVolume: 2,
-    totalValue: 3500,
-    freightCharge: 150,
-    totalCharges: 175,
-    shipperCity: "Chicago",
-    consigneeCity: "Detroit",
-  },
-];
-
-const orderTypes = ["FTL", "LTL", "PARCEL", "CONTAINER", "MULTIMODAL"];
-const orderStatuses = ["DRAFT", "CONFIRMED", "PLANNED", "DISPATCHED", "IN_TRANSIT", "DELIVERED", "POD_RECEIVED", "CLOSED"];
-const priorities = ["LOW", "NORMAL", "HIGH", "URGENT"];
+interface Customer {
+  id: string;
+  name: string;
+}
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>(mockOrders);
+  const { toast } = useToast();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
   const [formData, setFormData] = useState({
-    orderNo: "",
-    customerName: "",
-    orderType: "",
-    status: "DRAFT",
-    priority: "NORMAL",
-    pickupDate: "",
-    deliveryDate: "",
-    totalWeight: 0,
-    totalVolume: 0,
-    totalValue: 0,
-    freightCharge: 0,
-    totalCharges: 0,
-    shipperName: "",
-    shipperAddress: "",
-    shipperCity: "",
-    shipperState: "",
-    shipperCountry: "",
-    shipperPostalCode: "",
-    shipperPhone: "",
-    consigneeName: "",
-    consigneeAddress: "",
-    consigneeCity: "",
-    consigneeState: "",
-    consigneeCountry: "",
-    consigneePostalCode: "",
-    consigneePhone: "",
-    description: "",
-    deliveryInstructions: "",
+    customerId: "", orderType: "FTL", priority: "NORMAL", status: "DRAFT",
+    shipperName: "", shipperCity: "", consigneeName: "", consigneeCity: "",
+    totalWeight: "", packageCount: "", description: ""
   });
 
-  const filteredOrders = orders.filter(
-    (order) =>
-      order.orderNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customerName.toLowerCase().includes(searchTerm.toLowerCase())
+  const fetchOrders = async () => {
+    try {
+      const [ordersRes, customersRes] = await Promise.all([fetch("/api/orders"), fetch("/api/customers")]);
+      if (ordersRes.ok) setOrders(await ordersRes.json());
+      if (customersRes.ok) setCustomers(await customersRes.json());
+    } catch { toast({ title: "Error", description: "Failed to load orders", variant: "destructive" }); }
+    finally { setIsPageLoading(false); }
+  };
+
+  useEffect(() => { fetchOrders(); }, []);
+
+  const filteredOrders = orders.filter(o =>
+    o.orderNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (o.customer?.name && o.customer.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const handleCreate = () => {
-    const newOrder: Order = {
-      id: Date.now().toString(),
-      orderNo: formData.orderNo,
-      customerName: formData.customerName,
-      orderType: formData.orderType,
-      status: formData.status,
-      priority: formData.priority,
-      pickupDate: formData.pickupDate,
-      deliveryDate: formData.deliveryDate,
-      totalWeight: formData.totalWeight,
-      totalVolume: formData.totalVolume,
-      totalValue: formData.totalValue,
-      freightCharge: formData.freightCharge,
-      totalCharges: formData.totalCharges,
-      shipperCity: formData.shipperCity,
-      consigneeCity: formData.consigneeCity,
-    };
-    setOrders([...orders, newOrder]);
-    setIsCreateDialogOpen(false);
-    resetForm();
+  const resetForm = () => setFormData({ customerId: "", orderType: "FTL", priority: "NORMAL", status: "DRAFT", shipperName: "", shipperCity: "", consigneeName: "", consigneeCity: "", totalWeight: "", packageCount: "", description: "" });
+
+  const handleCreate = async () => {
+    if (!formData.customerId) { toast({ title: "Error", description: "Customer required", variant: "destructive" }); return; }
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
+      if (!res.ok) throw new Error();
+      await fetchOrders(); setIsCreateDialogOpen(false); resetForm();
+      toast({ title: "Order Created" });
+    } catch { toast({ title: "Error", description: "Failed to create order", variant: "destructive" }); }
+    finally { setIsLoading(false); }
   };
 
-  const handleEdit = (order: Order) => {
-    setEditingOrder(order);
-    setFormData({
-      orderNo: order.orderNo,
-      customerName: order.customerName,
-      orderType: order.orderType,
-      status: order.status,
-      priority: order.priority,
-      pickupDate: order.pickupDate,
-      deliveryDate: order.deliveryDate,
-      totalWeight: order.totalWeight,
-      totalVolume: order.totalVolume,
-      totalValue: order.totalValue,
-      freightCharge: order.freightCharge,
-      totalCharges: order.totalCharges,
-      shipperName: "",
-      shipperAddress: "",
-      shipperCity: order.shipperCity,
-      shipperState: "",
-      shipperCountry: "",
-      shipperPostalCode: "",
-      shipperPhone: "",
-      consigneeName: "",
-      consigneeAddress: "",
-      consigneeCity: order.consigneeCity,
-      consigneeState: "",
-      consigneeCountry: "",
-      consigneePostalCode: "",
-      consigneePhone: "",
-      description: "",
-      deliveryInstructions: "",
-    });
+  const handleEdit = (o: Order) => {
+    setSelectedOrder(o);
+    setFormData({ customerId: "", orderType: "FTL", priority: o.priority, status: o.status, shipperName: "", shipperCity: o.shipperCity || "", consigneeName: "", consigneeCity: o.consigneeCity || "", totalWeight: o.totalWeight.toString(), packageCount: o.packageCount.toString(), description: "" });
+    setIsEditDialogOpen(true);
   };
 
-  const handleUpdate = () => {
-    if (editingOrder) {
-      setOrders(
-        orders.map((o) =>
-          o.id === editingOrder.id
-            ? {
-                ...o,
-                orderNo: formData.orderNo,
-                customerName: formData.customerName,
-                orderType: formData.orderType,
-                status: formData.status,
-                priority: formData.priority,
-                pickupDate: formData.pickupDate,
-                deliveryDate: formData.deliveryDate,
-                totalWeight: formData.totalWeight,
-                totalVolume: formData.totalVolume,
-                totalValue: formData.totalValue,
-                freightCharge: formData.freightCharge,
-                totalCharges: formData.totalCharges,
-                shipperCity: formData.shipperCity,
-                consigneeCity: formData.consigneeCity,
-              }
-            : o
-        )
-      );
-      setEditingOrder(null);
-      resetForm();
-    }
+  const handleUpdate = async () => {
+    if (!selectedOrder) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/orders/${selectedOrder.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
+      if (!res.ok) throw new Error();
+      await fetchOrders(); setIsEditDialogOpen(false); setSelectedOrder(null);
+      toast({ title: "Order Updated" });
+    } catch { toast({ title: "Error", description: "Failed to update", variant: "destructive" }); }
+    finally { setIsLoading(false); }
   };
 
-  const handleDelete = (id: string) => {
-    setOrders(orders.filter((o) => o.id !== id));
+  const handleDeleteConfirm = async () => {
+    if (!selectedOrder) return;
+    setIsLoading(true);
+    try {
+      await fetch(`/api/orders/${selectedOrder.id}`, { method: "DELETE" });
+      await fetchOrders(); setIsDeleteDialogOpen(false); setSelectedOrder(null);
+      toast({ title: "Order Deleted", variant: "destructive" });
+    } catch { toast({ title: "Error", variant: "destructive" }); }
+    finally { setIsLoading(false); }
   };
 
-  const resetForm = () => {
-    setFormData({
-      orderNo: "",
-      customerName: "",
-      orderType: "",
-      status: "DRAFT",
-      priority: "NORMAL",
-      pickupDate: "",
-      deliveryDate: "",
-      totalWeight: 0,
-      totalVolume: 0,
-      totalValue: 0,
-      freightCharge: 0,
-      totalCharges: 0,
-      shipperName: "",
-      shipperAddress: "",
-      shipperCity: "",
-      shipperState: "",
-      shipperCountry: "",
-      shipperPostalCode: "",
-      shipperPhone: "",
-      consigneeName: "",
-      consigneeAddress: "",
-      consigneeCity: "",
-      consigneeState: "",
-      consigneeCountry: "",
-      consigneePostalCode: "",
-      consigneePhone: "",
-      description: "",
-      deliveryInstructions: "",
-    });
+  const getStatusColor = (s: string) => {
+    if (s === "DELIVERED" || s === "CLOSED") return "default";
+    if (s === "IN_TRANSIT" || s === "DISPATCHED") return "secondary";
+    if (s === "DRAFT") return "outline";
+    return "outline";
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "DRAFT":
-        return "secondary";
-      case "CONFIRMED":
-        return "default";
-      case "DISPATCHED":
-        return "secondary";
-      case "IN_TRANSIT":
-        return "secondary";
-      case "DELIVERED":
-        return "default";
-      default:
-        return "outline";
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "URGENT":
-        return "destructive";
-      case "HIGH":
-        return "secondary";
-      case "NORMAL":
-        return "default";
-      case "LOW":
-        return "outline";
-      default:
-        return "outline";
-    }
-  };
+  const OrderForm = () => (
+    <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
+      <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Customer</Label>
+        <Select value={formData.customerId} onValueChange={(v) => setFormData({ ...formData, customerId: v })}>
+          <SelectTrigger className="col-span-3"><SelectValue placeholder="Select customer" /></SelectTrigger>
+          <SelectContent>{customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Type</Label>
+        <Select value={formData.orderType} onValueChange={(v) => setFormData({ ...formData, orderType: v })}>
+          <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="FTL">Full Truck Load</SelectItem><SelectItem value="LTL">Less Than Truckload</SelectItem><SelectItem value="PARCEL">Parcel</SelectItem></SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Priority</Label>
+        <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v })}>
+          <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="LOW">Low</SelectItem><SelectItem value="NORMAL">Normal</SelectItem><SelectItem value="HIGH">High</SelectItem><SelectItem value="URGENT">Urgent</SelectItem></SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Origin City</Label><Input value={formData.shipperCity} onChange={(e) => setFormData({ ...formData, shipperCity: e.target.value })} className="col-span-3" /></div>
+      <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Dest City</Label><Input value={formData.consigneeCity} onChange={(e) => setFormData({ ...formData, consigneeCity: e.target.value })} className="col-span-3" /></div>
+      <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Weight (kg)</Label><Input type="number" value={formData.totalWeight} onChange={(e) => setFormData({ ...formData, totalWeight: e.target.value })} className="col-span-3" /></div>
+      <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Packages</Label><Input type="number" value={formData.packageCount} onChange={(e) => setFormData({ ...formData, packageCount: e.target.value })} className="col-span-3" /></div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
-          <p className="text-gray-600">Manage your shipment orders</p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Order
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Create New Order</DialogTitle>
-              <DialogDescription>
-                Create a new shipment order. Fill in the required information.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4 max-h-96 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="orderNo">Order No</Label>
-                  <Input
-                    id="orderNo"
-                    value={formData.orderNo}
-                    onChange={(e) => setFormData({ ...formData, orderNo: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="customerName">Customer</Label>
-                  <Input
-                    id="customerName"
-                    value={formData.customerName}
-                    onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="orderType">Order Type</Label>
-                  <Select
-                    value={formData.orderType}
-                    onValueChange={(value) => setFormData({ ...formData, orderType: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select order type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {orderTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="priority">Priority</Label>
-                  <Select
-                    value={formData.priority}
-                    onValueChange={(value) => setFormData({ ...formData, priority: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {priorities.map((priority) => (
-                        <SelectItem key={priority} value={priority}>
-                          {priority}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="pickupDate">Pickup Date</Label>
-                  <Input
-                    id="pickupDate"
-                    type="date"
-                    value={formData.pickupDate}
-                    onChange={(e) => setFormData({ ...formData, pickupDate: e.target.value })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="deliveryDate">Delivery Date</Label>
-                  <Input
-                    id="deliveryDate"
-                    type="date"
-                    value={formData.deliveryDate}
-                    onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="totalWeight">Weight (kg)</Label>
-                  <Input
-                    id="totalWeight"
-                    type="number"
-                    value={formData.totalWeight}
-                    onChange={(e) => setFormData({ ...formData, totalWeight: parseFloat(e.target.value) })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="totalVolume">Volume (m³)</Label>
-                  <Input
-                    id="totalVolume"
-                    type="number"
-                    value={formData.totalVolume}
-                    onChange={(e) => setFormData({ ...formData, totalVolume: parseFloat(e.target.value) })}
-                  />
-                </div>
-                <div className="grid items-center gap-2">
-                  <Label htmlFor="totalValue">Value ($)</Label>
-                  <Input
-                    id="totalValue"
-                    type="number"
-                    value={formData.totalValue}
-                    onChange={(e) => setFormData({ ...formData, totalValue: parseFloat(e.target.value) })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Shipper Information</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    placeholder="Shipper Name"
-                    value={formData.shipperName}
-                    onChange={(e) => setFormData({ ...formData, shipperName: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Shipper Phone"
-                    value={formData.shipperPhone}
-                    onChange={(e) => setFormData({ ...formData, shipperPhone: e.target.value })}
-                  />
-                </div>
-                <Input
-                  placeholder="Shipper Address"
-                  value={formData.shipperAddress}
-                  onChange={(e) => setFormData({ ...formData, shipperAddress: e.target.value })}
-                />
-                <div className="grid grid-cols-3 gap-4">
-                  <Input
-                    placeholder="City"
-                    value={formData.shipperCity}
-                    onChange={(e) => setFormData({ ...formData, shipperCity: e.target.value })}
-                  />
-                  <Input
-                    placeholder="State"
-                    value={formData.shipperState}
-                    onChange={(e) => setFormData({ ...formData, shipperState: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Country"
-                    value={formData.shipperCountry}
-                    onChange={(e) => setFormData({ ...formData, shipperCountry: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Consignee Information</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    placeholder="Consignee Name"
-                    value={formData.consigneeName}
-                    onChange={(e) => setFormData({ ...formData, consigneeName: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Consignee Phone"
-                    value={formData.consigneePhone}
-                    onChange={(e) => setFormData({ ...formData, consigneePhone: e.target.value })}
-                  />
-                </div>
-                <Input
-                  placeholder="Consignee Address"
-                  value={formData.consigneeAddress}
-                  onChange={(e) => setFormData({ ...formData, consigneeAddress: e.target.value })}
-                />
-                <div className="grid grid-cols-3 gap-4">
-                  <Input
-                    placeholder="City"
-                    value={formData.consigneeCity}
-                    onChange={(e) => setFormData({ ...formData, consigneeCity: e.target.value })}
-                  />
-                  <Input
-                    placeholder="State"
-                    value={formData.consigneeState}
-                    onChange={(e) => setFormData({ ...formData, consigneeState: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Country"
-                    value={formData.consigneeCountry}
-                    onChange={(e) => setFormData({ ...formData, consigneeCountry: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Order description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" onClick={handleCreate}>
-                Create Order
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <div><h1 className="text-3xl font-bold text-gray-900">Orders</h1><p className="text-gray-600">Manage customer orders</p></div>
+        <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}><Plus className="h-4 w-4 mr-2" />New Order</Button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Orders</CardTitle><Package className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{orders.length}</div></CardContent></Card>
+        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Draft</CardTitle><Package className="h-4 w-4 text-gray-500" /></CardHeader><CardContent><div className="text-2xl font-bold">{orders.filter(o => o.status === "DRAFT").length}</div></CardContent></Card>
+        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">In Transit</CardTitle><Package className="h-4 w-4 text-blue-500" /></CardHeader><CardContent><div className="text-2xl font-bold text-blue-600">{orders.filter(o => o.status === "IN_TRANSIT").length}</div></CardContent></Card>
+        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Delivered</CardTitle><Package className="h-4 w-4 text-green-500" /></CardHeader><CardContent><div className="text-2xl font-bold text-green-600">{orders.filter(o => o.status === "DELIVERED").length}</div></CardContent></Card>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Order List</CardTitle>
-          <CardDescription>
-            A list of all shipment orders in your system including their status and details.
-          </CardDescription>
-        </CardHeader>
+        <CardHeader><CardTitle>Order List</CardTitle><CardDescription>All orders</CardDescription></CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-2 mb-4">
-            <Search className="h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search orders..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-            />
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Order No</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Pickup</TableHead>
-                <TableHead>Delivery</TableHead>
-                <TableHead>Route</TableHead>
-                <TableHead>Weight/Volume</TableHead>
-                <TableHead>Charges</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredOrders.map((order) => (
-                <TableRow key={order.id}>
-                  <TableCell className="font-medium">{order.orderNo}</TableCell>
-                  <TableCell>{order.customerName}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{order.orderType}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusColor(order.status)}>
-                      {order.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getPriorityColor(order.priority)}>
-                      {order.priority}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>{order.pickupDate}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>{order.deliveryDate}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>{order.shipperCity}</div>
-                      <div className="text-gray-500">→ {order.consigneeCity}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>{order.totalWeight.toLocaleString()} kg</div>
-                      <div className="text-gray-500">{order.totalVolume} m³</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>${order.freightCharge}</div>
-                      <div className="text-gray-500">${order.totalCharges}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="sm">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(order)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(order.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="flex items-center space-x-2 mb-4"><Search className="h-4 w-4 text-gray-400" /><Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm" /></div>
+          {isPageLoading ? <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div> : (
+            <Table>
+              <TableHeader><TableRow><TableHead>Order No</TableHead><TableHead>Customer</TableHead><TableHead>Route</TableHead><TableHead>Weight</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {filteredOrders.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center h-24">No orders found.</TableCell></TableRow> :
+                  filteredOrders.map((o) => (
+                    <TableRow key={o.id}>
+                      <TableCell className="font-medium">{o.orderNo}</TableCell>
+                      <TableCell>{o.customer?.name || "-"}</TableCell>
+                      <TableCell><div className="flex items-center gap-1"><MapPin className="h-3 w-3" />{o.shipperCity || "-"} → {o.consigneeCity || "-"}</div></TableCell>
+                      <TableCell>{o.totalWeight} kg</TableCell>
+                      <TableCell><Badge variant={getStatusColor(o.status)}>{o.status}</Badge></TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-1">
+                          <Button variant="ghost" size="sm" onClick={() => { setSelectedOrder(o); setIsViewDialogOpen(true); }}><Eye className="h-4 w-4" /></Button>
+                          <Link href={`/dashboard/orders/waybill/${o.id}`}><Button variant="ghost" size="sm" title="Print Waybill"><Printer className="h-4 w-4" /></Button></Link>
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(o)}><Edit className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => { setSelectedOrder(o); setIsDeleteDialogOpen(true); }} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editingOrder} onOpenChange={() => setEditingOrder(null)}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Edit Order</DialogTitle>
-            <DialogDescription>
-              Update order information. Make sure to save your changes.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4 max-h-96 overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid items-center gap-2">
-                <Label htmlFor="edit-orderNo">Order No</Label>
-                <Input
-                  id="edit-orderNo"
-                  value={formData.orderNo}
-                  onChange={(e) => setFormData({ ...formData, orderNo: e.target.value })}
-                />
-              </div>
-              <div className="grid items-center gap-2">
-                <Label htmlFor="edit-customerName">Customer</Label>
-                <Input
-                  id="edit-customerName"
-                  value={formData.customerName}
-                  onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid items-center gap-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value) => setFormData({ ...formData, status: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {orderStatuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid items-center gap-2">
-                <Label htmlFor="edit-priority">Priority</Label>
-                <Select
-                  value={formData.priority}
-                  onValueChange={(value) => setFormData({ ...formData, priority: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {priorities.map((priority) => (
-                      <SelectItem key={priority} value={priority}>
-                        {priority}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="submit" onClick={handleUpdate}>
-              Update Order
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>New Order</DialogTitle><DialogDescription>Create a new order.</DialogDescription></DialogHeader><OrderForm /><DialogFooter><Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button><Button onClick={handleCreate} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Edit Order</DialogTitle></DialogHeader><OrderForm /><DialogFooter><Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button><Button onClick={handleUpdate} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}><DialogContent><DialogHeader><DialogTitle>Order Details</DialogTitle><DialogDescription>{selectedOrder?.orderNo}</DialogDescription></DialogHeader>{selectedOrder && <div className="grid gap-4 py-4 grid-cols-2"><div><Label className="text-muted-foreground text-xs">Customer</Label><div className="font-medium">{selectedOrder.customer?.name}</div></div><div><Label className="text-muted-foreground text-xs">Status</Label><Badge variant={getStatusColor(selectedOrder.status)}>{selectedOrder.status}</Badge></div><div><Label className="text-muted-foreground text-xs">Route</Label><div className="font-medium">{selectedOrder.shipperCity} → {selectedOrder.consigneeCity}</div></div><div><Label className="text-muted-foreground text-xs">Weight</Label><div className="font-medium">{selectedOrder.totalWeight} kg</div></div><div><Label className="text-muted-foreground text-xs">Packages</Label><div className="font-medium">{selectedOrder.packageCount}</div></div></div>}<DialogFooter><Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button></DialogFooter></DialogContent></Dialog>
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Order?</AlertDialogTitle><AlertDialogDescription>This will permanently delete <strong>{selectedOrder?.orderNo}</strong>.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 }

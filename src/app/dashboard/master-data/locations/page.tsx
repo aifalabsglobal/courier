@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -48,74 +48,15 @@ interface Location {
     code: string;
     name: string;
     type: string;
-    address: string;
-    city: string;
-    state: string;
-    country: string;
-    postalCode: string;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    country: string | null;
+    postalCode: string | null;
     latitude: number | null;
     longitude: number | null;
     isActive: boolean;
 }
-
-const mockLocations: Location[] = [
-    {
-        id: "1",
-        code: "LOC001",
-        name: "Main Distribution Center",
-        type: "warehouse",
-        address: "123 Logistics Way",
-        city: "Dallas",
-        state: "TX",
-        country: "USA",
-        postalCode: "75201",
-        latitude: 32.7767,
-        longitude: -96.7970,
-        isActive: true,
-    },
-    {
-        id: "2",
-        code: "LOC002",
-        name: "Port of Los Angeles",
-        type: "port",
-        address: "425 S Palos Verdes St",
-        city: "San Pedro",
-        state: "CA",
-        country: "USA",
-        postalCode: "90731",
-        latitude: 33.7407,
-        longitude: -118.2777,
-        isActive: true,
-    },
-    {
-        id: "3",
-        code: "LOC003",
-        name: "Chicago O'Hare Hub",
-        type: "airport",
-        address: "10000 W O'Hare Ave",
-        city: "Chicago",
-        state: "IL",
-        country: "USA",
-        postalCode: "60666",
-        latitude: 41.9742,
-        longitude: -87.9073,
-        isActive: true,
-    },
-    {
-        id: "4",
-        code: "LOC004",
-        name: "East Coast Fulfillment",
-        type: "fulfillment_center",
-        address: "500 Commerce Drive",
-        city: "Newark",
-        state: "NJ",
-        country: "USA",
-        postalCode: "07102",
-        latitude: 40.7357,
-        longitude: -74.1724,
-        isActive: false,
-    },
-];
 
 const locationTypes = [
     { value: "warehouse", label: "Warehouse", icon: Building },
@@ -128,9 +69,10 @@ const locationTypes = [
 
 export default function LocationsPage() {
     const { toast } = useToast();
-    const [locations, setLocations] = useState<Location[]>(mockLocations);
+    const [locations, setLocations] = useState<Location[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isPageLoading, setIsPageLoading] = useState(true);
 
     // Dialog states
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -155,16 +97,34 @@ export default function LocationsPage() {
         isActive: true
     });
 
+    const fetchLocations = async () => {
+        try {
+            const res = await fetch("/api/locations");
+            if (!res.ok) throw new Error("Failed to fetch locations");
+            const data = await res.json();
+            setLocations(data);
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to load locations", variant: "destructive" });
+        } finally {
+            setIsPageLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLocations();
+    }, []);
+
     const filteredLocations = locations.filter(
         (location) =>
             location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            location.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            location.city.toLowerCase().includes(searchTerm.toLowerCase())
+            (location.code && location.code.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (location.city && location.city.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     const resetForm = () => {
         setFormData({
-            code: `LOC${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+            code: "",
             name: "",
             type: "warehouse",
             address: "",
@@ -180,27 +140,36 @@ export default function LocationsPage() {
 
     const handleCreate = async () => {
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+            const res = await fetch("/api/locations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: formData.name,
+                    type: formData.type,
+                    address: formData.address,
+                    city: formData.city,
+                    state: formData.state,
+                    country: formData.country,
+                    postalCode: formData.postalCode,
+                    latitude: formData.latitude,
+                    longitude: formData.longitude,
+                    status: formData.isActive ? "Active" : "Inactive"
+                }),
+            });
 
-        const newLocation: Location = {
-            id: Date.now().toString(),
-            code: formData.code,
-            name: formData.name,
-            type: formData.type,
-            address: formData.address,
-            city: formData.city,
-            state: formData.state,
-            country: formData.country,
-            postalCode: formData.postalCode,
-            latitude: formData.latitude ? parseFloat(formData.latitude) : null,
-            longitude: formData.longitude ? parseFloat(formData.longitude) : null,
-            isActive: true,
-        };
-        setLocations([...locations, newLocation]);
-        setIsCreateDialogOpen(false);
-        resetForm();
-        setIsLoading(false);
-        toast({ title: "Location Added", description: `${formData.name} has been created.` });
+            if (!res.ok) throw new Error("Failed to create location");
+
+            await fetchLocations();
+            setIsCreateDialogOpen(false);
+            resetForm();
+            toast({ title: "Location Added", description: `${formData.name} has been created.` });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to create location", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleEdit = (location: Location) => {
@@ -209,11 +178,11 @@ export default function LocationsPage() {
             code: location.code,
             name: location.name,
             type: location.type,
-            address: location.address,
-            city: location.city,
-            state: location.state,
-            country: location.country,
-            postalCode: location.postalCode,
+            address: location.address || "",
+            city: location.city || "",
+            state: location.state || "",
+            country: location.country || "",
+            postalCode: location.postalCode || "",
             latitude: location.latitude?.toString() || "",
             longitude: location.longitude?.toString() || "",
             isActive: location.isActive
@@ -224,24 +193,36 @@ export default function LocationsPage() {
     const handleUpdate = async () => {
         if (!selectedLocation) return;
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+            const res = await fetch(`/api/locations/${selectedLocation.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: formData.name,
+                    type: formData.type,
+                    address: formData.address,
+                    city: formData.city,
+                    state: formData.state,
+                    country: formData.country,
+                    postalCode: formData.postalCode,
+                    latitude: formData.latitude,
+                    longitude: formData.longitude,
+                    status: formData.isActive ? "Active" : "Inactive"
+                }),
+            });
 
-        setLocations(
-            locations.map((l) =>
-                l.id === selectedLocation.id
-                    ? {
-                        ...l,
-                        ...formData,
-                        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
-                        longitude: formData.longitude ? parseFloat(formData.longitude) : null,
-                    }
-                    : l
-            )
-        );
-        setIsEditDialogOpen(false);
-        setSelectedLocation(null);
-        setIsLoading(false);
-        toast({ title: "Location Updated", description: "Location details modified." });
+            if (!res.ok) throw new Error("Failed to update location");
+
+            await fetchLocations();
+            setIsEditDialogOpen(false);
+            setSelectedLocation(null);
+            toast({ title: "Location Updated", description: "Location details modified." });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to update location", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleView = (location: Location) => {
@@ -257,13 +238,22 @@ export default function LocationsPage() {
     const handleDeleteConfirm = async () => {
         if (!selectedLocation) return;
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+            const res = await fetch(`/api/locations/${selectedLocation.id}`, {
+                method: "DELETE"
+            });
+            if (!res.ok) throw new Error("Failed to delete location");
 
-        setLocations(locations.filter((l) => l.id !== selectedLocation.id));
-        setIsDeleteDialogOpen(false);
-        setSelectedLocation(null);
-        setIsLoading(false);
-        toast({ title: "Location Deleted", description: "Location removed from database.", variant: "destructive" });
+            await fetchLocations();
+            setIsDeleteDialogOpen(false);
+            setSelectedLocation(null);
+            toast({ title: "Location Deleted", description: "Location removed from database.", variant: "destructive" });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to delete location", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const getTypeDetails = (type: string) => {
@@ -276,8 +266,9 @@ export default function LocationsPage() {
                 <Label className="text-right">Code</Label>
                 <Input
                     value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className="col-span-3"
+                    disabled
+                    placeholder="Auto-generated"
+                    className="col-span-3 bg-muted"
                 />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -406,7 +397,7 @@ export default function LocationsPage() {
                         <CardTitle className="text-sm font-medium">Global</CardTitle>
                         <MapPin className="h-4 w-4 text-purple-500" />
                     </CardHeader>
-                    <CardContent><div className="text-2xl font-bold text-purple-600">{new Set(locations.map(l => l.country)).size} Countries</div></CardContent>
+                    <CardContent><div className="text-2xl font-bold text-purple-600">{new Set(locations.map(l => l.country).filter(Boolean)).size} Countries</div></CardContent>
                 </Card>
             </div>
 
@@ -427,62 +418,74 @@ export default function LocationsPage() {
                             className="max-w-sm"
                         />
                     </div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Code</TableHead>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>City/State</TableHead>
-                                <TableHead>Coordinates</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredLocations.map((location) => {
-                                const typeInfo = getTypeDetails(location.type);
-                                const TypeIcon = typeInfo.icon;
-                                return (
-                                    <TableRow key={location.id}>
-                                        <TableCell className="font-medium">{location.code}</TableCell>
-                                        <TableCell>
-                                            <div className="flex flex-col">
-                                                <span>{location.name}</span>
-                                                <span className="text-xs text-muted-foreground">{location.address}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline" className="flex w-fit items-center gap-1">
-                                                <TypeIcon className="h-3 w-3" />
-                                                {typeInfo.label}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>{location.city}, {location.state}</TableCell>
-                                        <TableCell>
-                                            {location.latitude && location.longitude ? (
-                                                <span className="text-xs text-gray-500 font-mono">
-                                                    {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
-                                                </span>
-                                            ) : <span className="text-xs text-muted-foreground">-</span>}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={location.isActive ? "default" : "secondary"}>
-                                                {location.isActive ? "Active" : "Inactive"}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center space-x-1">
-                                                <Button variant="ghost" size="sm" onClick={() => handleView(location)}><Eye className="h-4 w-4" /></Button>
-                                                <Button variant="ghost" size="sm" onClick={() => handleEdit(location)}><Edit className="h-4 w-4" /></Button>
-                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(location)} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
-                                            </div>
-                                        </TableCell>
+                    {isPageLoading ? (
+                        <div className="flex justify-center p-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Code</TableHead>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Type</TableHead>
+                                    <TableHead>City/State</TableHead>
+                                    <TableHead>Coordinates</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredLocations.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center h-24">No locations found.</TableCell>
                                     </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
+                                ) : (
+                                    filteredLocations.map((location) => {
+                                        const typeInfo = getTypeDetails(location.type);
+                                        const TypeIcon = typeInfo.icon;
+                                        return (
+                                            <TableRow key={location.id}>
+                                                <TableCell className="font-medium">{location.code || "-"}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-col">
+                                                        <span>{location.name}</span>
+                                                        <span className="text-xs text-muted-foreground">{location.address || "-"}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline" className="flex w-fit items-center gap-1">
+                                                        <TypeIcon className="h-3 w-3" />
+                                                        {typeInfo.label}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>{[location.city, location.state].filter(Boolean).join(", ") || "-"}</TableCell>
+                                                <TableCell>
+                                                    {location.latitude && location.longitude ? (
+                                                        <span className="text-xs text-gray-500 font-mono">
+                                                            {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+                                                        </span>
+                                                    ) : <span className="text-xs text-muted-foreground">-</span>}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant={location.isActive ? "default" : "secondary"}>
+                                                        {location.isActive ? "Active" : "Inactive"}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center space-x-1">
+                                                        <Button variant="ghost" size="sm" onClick={() => handleView(location)}><Eye className="h-4 w-4" /></Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => handleEdit(location)}><Edit className="h-4 w-4" /></Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(location)} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    )}
                 </CardContent>
             </Card>
 
@@ -542,11 +545,11 @@ export default function LocationsPage() {
                                 </div>
                                 <div className="col-span-2">
                                     <Label className="text-muted-foreground text-xs">Address</Label>
-                                    <div className="font-medium">{selectedLocation.address}</div>
-                                    <div className="font-medium">{selectedLocation.city}, {selectedLocation.state} {selectedLocation.postalCode}</div>
-                                    <div className="font-medium">{selectedLocation.country}</div>
+                                    <div className="font-medium">{selectedLocation.address || "-"}</div>
+                                    <div className="font-medium">{[selectedLocation.city, selectedLocation.state, selectedLocation.postalCode].filter(Boolean).join(", ")}</div>
+                                    <div className="font-medium">{selectedLocation.country || "-"}</div>
                                 </div>
-                                {selectedLocation.latitude && (
+                                {selectedLocation.latitude && selectedLocation.longitude && (
                                     <div className="col-span-2">
                                         <Label className="text-muted-foreground text-xs">Coordinates</Label>
                                         <div className="font-medium flex items-center gap-2">

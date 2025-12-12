@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,6 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog";
 import {
     AlertDialog,
@@ -40,75 +39,22 @@ interface RouteData {
     id: string;
     origin: string;
     destination: string;
-    distance: number;
-    normalHours: number;
+    distance: number | null;
+    normalHours: number | null;
     isActive: boolean;
 }
 
-const mockRoutes: RouteData[] = [
-    {
-        id: "1",
-        origin: "Dallas, TX",
-        destination: "Houston, TX",
-        distance: 385,
-        normalHours: 4.5,
-        isActive: true,
-    },
-    {
-        id: "2",
-        origin: "Los Angeles, CA",
-        destination: "San Diego, CA",
-        distance: 195,
-        normalHours: 2.5,
-        isActive: true,
-    },
-    {
-        id: "3",
-        origin: "Chicago, IL",
-        destination: "Detroit, MI",
-        distance: 450,
-        normalHours: 5,
-        isActive: true,
-    },
-    {
-        id: "4",
-        origin: "Miami, FL",
-        destination: "Orlando, FL",
-        distance: 380,
-        normalHours: 4,
-        isActive: false,
-    },
-    {
-        id: "5",
-        origin: "Seattle, WA",
-        destination: "Portland, OR",
-        distance: 280,
-        normalHours: 3,
-        isActive: true,
-    },
-    {
-        id: "6",
-        origin: "New York, NY",
-        destination: "Boston, MA",
-        distance: 350,
-        normalHours: 4,
-        isActive: true,
-    },
-];
-
 export default function RoutesPage() {
     const { toast } = useToast();
-    const [routes, setRoutes] = useState<RouteData[]>(mockRoutes);
+    const [routes, setRoutes] = useState<RouteData[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isPageLoading, setIsPageLoading] = useState(true);
 
-    // Dialog states
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-
-    // Selected route
     const [selectedRoute, setSelectedRoute] = useState<RouteData | null>(null);
 
     const [formData, setFormData] = useState({
@@ -118,6 +64,24 @@ export default function RoutesPage() {
         normalHours: 0,
         isActive: true
     });
+
+    const fetchRoutes = async () => {
+        try {
+            const res = await fetch("/api/routes");
+            if (!res.ok) throw new Error("Failed to fetch routes");
+            const data = await res.json();
+            setRoutes(data);
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to load routes", variant: "destructive" });
+        } finally {
+            setIsPageLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchRoutes();
+    }, []);
 
     const filteredRoutes = routes.filter(
         (route) =>
@@ -130,18 +94,28 @@ export default function RoutesPage() {
     };
 
     const handleCreate = async () => {
+        if (!formData.origin || !formData.destination) {
+            toast({ title: "Error", description: "Origin and destination are required", variant: "destructive" });
+            return;
+        }
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        const newRoute: RouteData = {
-            id: Date.now().toString(),
-            ...formData,
-        };
-        setRoutes([...routes, newRoute]);
-        setIsCreateDialogOpen(false);
-        resetForm();
-        setIsLoading(false);
-        toast({ title: "Route Created", description: `Route from ${formData.origin} to ${formData.destination} added.` });
+        try {
+            const res = await fetch("/api/routes", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formData),
+            });
+            if (!res.ok) throw new Error("Failed to create route");
+            await fetchRoutes();
+            setIsCreateDialogOpen(false);
+            resetForm();
+            toast({ title: "Route Created", description: `Route from ${formData.origin} to ${formData.destination} added.` });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to create route", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleEdit = (route: RouteData) => {
@@ -149,8 +123,8 @@ export default function RoutesPage() {
         setFormData({
             origin: route.origin,
             destination: route.destination,
-            distance: route.distance,
-            normalHours: route.normalHours,
+            distance: route.distance || 0,
+            normalHours: route.normalHours || 0,
             isActive: route.isActive
         });
         setIsEditDialogOpen(true);
@@ -159,17 +133,23 @@ export default function RoutesPage() {
     const handleUpdate = async () => {
         if (!selectedRoute) return;
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        setRoutes(routes.map(r =>
-            r.id === selectedRoute.id
-                ? { ...r, ...formData }
-                : r
-        ));
-        setIsEditDialogOpen(false);
-        setSelectedRoute(null);
-        setIsLoading(false);
-        toast({ title: "Route Updated", description: "Route details updated." });
+        try {
+            const res = await fetch(`/api/routes/${selectedRoute.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formData),
+            });
+            if (!res.ok) throw new Error("Failed to update route");
+            await fetchRoutes();
+            setIsEditDialogOpen(false);
+            setSelectedRoute(null);
+            toast({ title: "Route Updated", description: "Route details updated." });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to update route", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleView = (route: RouteData) => {
@@ -185,17 +165,29 @@ export default function RoutesPage() {
     const handleDeleteConfirm = async () => {
         if (!selectedRoute) return;
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+            const res = await fetch(`/api/routes/${selectedRoute.id}`, { method: "DELETE" });
+            if (!res.ok) throw new Error("Failed to delete route");
+            await fetchRoutes();
+            setIsDeleteDialogOpen(false);
+            setSelectedRoute(null);
+            toast({ title: "Route Deleted", description: "Route removed.", variant: "destructive" });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to delete route", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-        setRoutes(routes.filter((r) => r.id !== selectedRoute.id));
-        setIsDeleteDialogOpen(false);
-        setSelectedRoute(null);
-        setIsLoading(false);
-        toast({ title: "Route Deleted", description: "Route removed from configuration.", variant: "destructive" });
+    const stats = {
+        total: routes.length,
+        totalDistance: routes.reduce((sum, r) => sum + (r.distance || 0), 0),
+        avgTransit: routes.length > 0 ? routes.reduce((sum, r) => sum + (r.normalHours || 0), 0) / routes.length : 0
     };
 
     const RouteForm = () => (
-        <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
+        <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">Origin</Label>
                 <Input
@@ -219,7 +211,7 @@ export default function RoutesPage() {
                 <Input
                     type="number"
                     value={formData.distance}
-                    onChange={(e) => setFormData({ ...formData, distance: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, distance: parseFloat(e.target.value) || 0 })}
                     className="col-span-3"
                 />
             </div>
@@ -229,7 +221,7 @@ export default function RoutesPage() {
                     type="number"
                     step="0.5"
                     value={formData.normalHours}
-                    onChange={(e) => setFormData({ ...formData, normalHours: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, normalHours: parseFloat(e.target.value) || 0 })}
                     className="col-span-3"
                 />
             </div>
@@ -249,47 +241,34 @@ export default function RoutesPage() {
                 </Button>
             </div>
 
-            {/* Stats Cards */}
             <div className="grid gap-4 md:grid-cols-3">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Routes</CardTitle>
                         <Route className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{routes.length}</div>
-                    </CardContent>
+                    <CardContent><div className="text-2xl font-bold">{stats.total}</div></CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Distance</CardTitle>
                         <MapPin className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">
-                            {routes.reduce((sum, r) => sum + r.distance, 0).toLocaleString()} km
-                        </div>
-                    </CardContent>
+                    <CardContent><div className="text-2xl font-bold">{stats.totalDistance.toLocaleString()} km</div></CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Avg Transit Time</CardTitle>
                         <Clock className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">
-                            {(routes.reduce((sum, r) => sum + r.normalHours, 0) / routes.length).toFixed(1)} hrs
-                        </div>
-                    </CardContent>
+                    <CardContent><div className="text-2xl font-bold">{stats.avgTransit.toFixed(1)} hrs</div></CardContent>
                 </Card>
             </div>
 
             <Card>
                 <CardHeader>
                     <CardTitle>Route List</CardTitle>
-                    <CardDescription>
-                        All configured transportation routes with distance and transit time information.
-                    </CardDescription>
+                    <CardDescription>All configured transportation routes.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="flex items-center space-x-2 mb-4">
@@ -301,62 +280,65 @@ export default function RoutesPage() {
                             className="max-w-sm"
                         />
                     </div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Origin</TableHead>
-                                <TableHead>Destination</TableHead>
-                                <TableHead>Distance</TableHead>
-                                <TableHead>Transit Time</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredRoutes.map((route) => (
-                                <TableRow key={route.id}>
-                                    <TableCell className="font-medium">
-                                        <div className="flex items-center gap-2">
-                                            <MapPin className="h-4 w-4 text-green-500" />
-                                            {route.origin}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            <MapPin className="h-4 w-4 text-red-500" />
-                                            {route.destination}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>{route.distance.toLocaleString()} km</TableCell>
-                                    <TableCell>{route.normalHours} hrs</TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            variant={route.isActive ? "default" : "secondary"}
-                                        >
-                                            {route.isActive ? "Active" : "Inactive"}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center space-x-2">
-                                            <Button variant="ghost" size="sm" onClick={() => handleView(route)}>
-                                                <Eye className="h-4 w-4" />
-                                            </Button>
-                                            <Button variant="ghost" size="sm" onClick={() => handleEdit(route)}>
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
-                                            <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(route)}>
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
+                    {isPageLoading ? (
+                        <div className="flex justify-center p-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Origin</TableHead>
+                                    <TableHead>Destination</TableHead>
+                                    <TableHead>Distance</TableHead>
+                                    <TableHead>Transit Time</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Actions</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredRoutes.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center h-24">No routes found.</TableCell>
+                                    </TableRow>
+                                ) : (
+                                    filteredRoutes.map((route) => (
+                                        <TableRow key={route.id}>
+                                            <TableCell className="font-medium">
+                                                <div className="flex items-center gap-2">
+                                                    <MapPin className="h-4 w-4 text-green-500" />
+                                                    {route.origin}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <MapPin className="h-4 w-4 text-red-500" />
+                                                    {route.destination}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{route.distance?.toLocaleString() || 0} km</TableCell>
+                                            <TableCell>{route.normalHours || 0} hrs</TableCell>
+                                            <TableCell>
+                                                <Badge variant={route.isActive ? "default" : "secondary"}>
+                                                    {route.isActive ? "Active" : "Inactive"}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center space-x-2">
+                                                    <Button variant="ghost" size="sm" onClick={() => handleView(route)}><Eye className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(route)}><Edit className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(route)} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    )}
                 </CardContent>
             </Card>
 
-            {/* Create Dialog */}
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
@@ -374,7 +356,6 @@ export default function RoutesPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Edit Dialog */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
@@ -392,31 +373,30 @@ export default function RoutesPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* View Dialog */}
             <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle>Route Details</DialogTitle>
-                        <DialogDescription>Information for {selectedRoute?.origin} to {selectedRoute?.destination}</DialogDescription>
+                        <DialogDescription>{selectedRoute?.origin} to {selectedRoute?.destination}</DialogDescription>
                     </DialogHeader>
                     {selectedRoute && (
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="col-span-2">
+                                <div>
                                     <Label className="text-muted-foreground text-xs">Origin</Label>
                                     <div className="font-medium flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedRoute.origin}</div>
                                 </div>
-                                <div className="col-span-2">
+                                <div>
                                     <Label className="text-muted-foreground text-xs">Destination</Label>
                                     <div className="font-medium flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedRoute.destination}</div>
                                 </div>
                                 <div>
                                     <Label className="text-muted-foreground text-xs">Distance</Label>
-                                    <div className="font-medium">{selectedRoute.distance} km</div>
+                                    <div className="font-medium">{selectedRoute.distance || 0} km</div>
                                 </div>
                                 <div>
                                     <Label className="text-muted-foreground text-xs">Transit Time</Label>
-                                    <div className="font-medium">{selectedRoute.normalHours} hrs</div>
+                                    <div className="font-medium">{selectedRoute.normalHours || 0} hrs</div>
                                 </div>
                                 <div>
                                     <Label className="text-muted-foreground text-xs">Status</Label>
@@ -436,7 +416,6 @@ export default function RoutesPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Delete Confirmation */}
             <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>

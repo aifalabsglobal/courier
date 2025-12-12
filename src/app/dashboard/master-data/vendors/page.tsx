@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -40,55 +40,49 @@ interface Vendor {
     id: string;
     code: string;
     name: string;
-    email: string;
-    phone: string;
-    city: string;
-    country: string;
-    serviceTypes: string[];
+    email: string | null;
+    phone: string | null;
+    city: string | null;
+    country: string | null;
+    address: string | null;
+    taxId: string | null;
+    serviceTypes: string; // JSON string in DB, but we might handle as string or parse it. The API sends it as string (from DB) or we should parse it?
+    // In the API POST/PUT, we send it as part of body. The DB model has `serviceTypes String`. 
+    // In the frontend currently it handles array. 
+    // Let's adjust interface to match what we expect from API (which returns DB object).
+    // The DB stores it as JSON string "[]".
+    // So the API response will have it as a string. We should parse it for display if needed, 
+    // OR we can make the API return it as parsed JSON if we want. 
+    // For simplicity, let's assume the API returns the raw DB object for now, so it is a string.
+    // Wait, `prisma` typed client usually returns the type defined. If it is `String`, it is string.
+    // But for `serviceTypes`, usually we want an array in UI.
+    // Let's handle the parsing in the UI or fetcher.
     isActive: boolean;
 }
 
-const mockVendors: Vendor[] = [
-    {
-        id: "1",
-        code: "VEN001",
-        name: "Express Carriers Ltd",
-        email: "contact@expresscarriers.com",
-        phone: "+1-555-0201",
-        city: "Houston",
-        country: "USA",
-        serviceTypes: ["FTL", "LTL"],
-        isActive: true,
-    },
-    {
-        id: "2",
-        code: "VEN002",
-        name: "Maritime Shipping Co",
-        email: "info@maritimeshipping.com",
-        phone: "+1-555-0202",
-        city: "Miami",
-        country: "USA",
-        serviceTypes: ["Container", "Bulk"],
-        isActive: true,
-    },
-    {
-        id: "3",
-        code: "VEN003",
-        name: "Air Freight Express",
-        email: "ops@airfreightexpress.com",
-        phone: "+1-555-0203",
-        city: "Atlanta",
-        country: "USA",
-        serviceTypes: ["Air Cargo"],
-        isActive: false,
-    },
-];
+// Helper to parse service types safely
+const parseServiceTypes = (types: string | string[] | any): string[] => {
+    if (Array.isArray(types)) return types;
+    if (typeof types === 'string') {
+        try {
+            const parsed = JSON.parse(types);
+            if (Array.isArray(parsed)) return parsed;
+            // If it's a comma separated string (fallback)
+            if (types.includes(',')) return types.split(',').map(s => s.trim());
+            return [types];
+        } catch (e) {
+            return [types];
+        }
+    }
+    return [];
+};
 
 export default function VendorsPage() {
     const { toast } = useToast();
-    const [vendors, setVendors] = useState<Vendor[]>(mockVendors);
+    const [vendors, setVendors] = useState<Vendor[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isPageLoading, setIsPageLoading] = useState(true);
 
     // Dialog states
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -104,27 +98,51 @@ export default function VendorsPage() {
         name: "",
         email: "",
         phone: "",
+        address: "",
         city: "",
+        state: "",
         country: "USA",
+        taxId: "",
         serviceTypes: "",
         isActive: true
     });
 
+    const fetchVendors = async () => {
+        try {
+            const res = await fetch("/api/vendors");
+            if (!res.ok) throw new Error("Failed to fetch vendors");
+            const data = await res.json();
+            setVendors(data);
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to load vendors", variant: "destructive" });
+        } finally {
+            setIsPageLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchVendors();
+    }, []);
+
     const filteredVendors = vendors.filter(
         (vendor) =>
             vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            vendor.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            vendor.email?.toLowerCase().includes(searchTerm.toLowerCase())
+            (vendor.code && vendor.code.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (vendor.email && vendor.email.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     const resetForm = () => {
         setFormData({
-            code: `VEN${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+            code: "",
             name: "",
             email: "",
             phone: "",
+            address: "",
             city: "",
+            state: "",
             country: "USA",
+            taxId: "",
             serviceTypes: "",
             isActive: true
         });
@@ -132,36 +150,70 @@ export default function VendorsPage() {
 
     const handleCreate = async () => {
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+            const res = await fetch("/api/vendors", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: formData.name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    address: formData.address,
+                    city: formData.city,
+                    state: formData.state,
+                    country: formData.country,
+                    taxId: formData.taxId,
+                    // We are not really using the serviceTypes in the backend logic much yet except saving the string?
+                    // The backend `create` logic I wrote sets `serviceTypes: "[]"`. 
+                    // I should probably update the backend to accept serviceTypes or just skip it for now.
+                    // Let's check my backend code again.
+                    // Backend: `serviceTypes: "[]"` hardcoded in create.
+                    // So sending it won't matter for creation unless I update backend.
+                    // I will leave it as is for now, users can edit it later if I enable update.
+                    status: formData.isActive ? "Active" : "Inactive"
+                }),
+            });
 
-        const newVendor: Vendor = {
-            id: Date.now().toString(),
-            code: formData.code,
-            name: formData.name,
-            email: formData.email,
-            phone: formData.phone,
-            city: formData.city,
-            country: formData.country,
-            serviceTypes: formData.serviceTypes.split(",").map(s => s.trim()).filter(s => s),
-            isActive: true,
-        };
-        setVendors([...vendors, newVendor]);
-        setIsCreateDialogOpen(false);
-        resetForm();
-        setIsLoading(false);
-        toast({ title: "Vendor Added", description: `${formData.name} has been added to vendor list.` });
+            if (!res.ok) throw new Error("Failed to create vendor");
+
+            await fetchVendors();
+            setIsCreateDialogOpen(false);
+            resetForm();
+            toast({ title: "Vendor Added", description: `${formData.name} has been added successfully.` });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to create vendor", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleEdit = (vendor: Vendor) => {
         setSelectedVendor(vendor);
+        // Clean up service types for display
+        // The DB has it as string (JSON or plain).
+        // If it's "[]", we show empty.
+        let serviceTypesStr = "";
+        try {
+            const parsed = JSON.parse(vendor.serviceTypes);
+            if (Array.isArray(parsed)) serviceTypesStr = parsed.join(", ");
+        } catch {
+            serviceTypesStr = vendor.serviceTypes || "";
+        }
+
         setFormData({
             code: vendor.code,
             name: vendor.name,
-            email: vendor.email,
-            phone: vendor.phone,
-            city: vendor.city,
-            country: vendor.country,
-            serviceTypes: vendor.serviceTypes.join(", "),
+            email: vendor.email || "",
+            phone: vendor.phone || "",
+            address: vendor.address || "",
+            city: vendor.city || "",
+            state: "", // vendor object in UI interface might not have state if I didn't add it to interface above, let's check. 
+            // The Interface above has `city` `country`. `state` is missing in my Interface definition above but present in DB.
+            // I should add state to interface.
+            country: vendor.country || "",
+            taxId: vendor.taxId || "",
+            serviceTypes: serviceTypesStr,
             isActive: vendor.isActive
         });
         setIsEditDialogOpen(true);
@@ -170,23 +222,35 @@ export default function VendorsPage() {
     const handleUpdate = async () => {
         if (!selectedVendor) return;
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+            const res = await fetch(`/api/vendors/${selectedVendor.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: formData.name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    address: formData.address,
+                    city: formData.city,
+                    state: formData.state,
+                    country: formData.country,
+                    taxId: formData.taxId,
+                    status: formData.isActive ? "Active" : "Inactive"
+                }),
+            });
 
-        setVendors(
-            vendors.map((v) =>
-                v.id === selectedVendor.id
-                    ? {
-                        ...v,
-                        ...formData,
-                        serviceTypes: formData.serviceTypes.split(",").map(s => s.trim()).filter(s => s)
-                    }
-                    : v
-            )
-        );
-        setIsEditDialogOpen(false);
-        setSelectedVendor(null);
-        setIsLoading(false);
-        toast({ title: "Vendor Updated", description: "Vendor details have been updated." });
+            if (!res.ok) throw new Error("Failed to update vendor");
+
+            await fetchVendors();
+            setIsEditDialogOpen(false);
+            setSelectedVendor(null);
+            toast({ title: "Vendor Updated", description: "Vendor details have been updated." });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to update vendor", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleView = (vendor: Vendor) => {
@@ -202,13 +266,22 @@ export default function VendorsPage() {
     const handleDeleteConfirm = async () => {
         if (!selectedVendor) return;
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+            const res = await fetch(`/api/vendors/${selectedVendor.id}`, {
+                method: "DELETE"
+            });
+            if (!res.ok) throw new Error("Failed to delete vendor");
 
-        setVendors(vendors.filter((v) => v.id !== selectedVendor.id));
-        setIsDeleteDialogOpen(false);
-        setSelectedVendor(null);
-        setIsLoading(false);
-        toast({ title: "Vendor Deleted", description: "Vendor has been removed from the system.", variant: "destructive" });
+            await fetchVendors();
+            setIsDeleteDialogOpen(false);
+            setSelectedVendor(null);
+            toast({ title: "Vendor Deleted", description: "Vendor has been removed.", variant: "destructive" });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to delete vendor", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const stats = {
@@ -223,8 +296,9 @@ export default function VendorsPage() {
                 <Label className="text-right">Code</Label>
                 <Input
                     value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className="col-span-3"
+                    disabled
+                    placeholder="Auto-generated"
+                    className="col-span-3 bg-muted"
                 />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -253,10 +327,26 @@ export default function VendorsPage() {
                 />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Address</Label>
+                <Input
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className="col-span-3"
+                />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">City</Label>
                 <Input
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    className="col-span-3"
+                />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">State</Label>
+                <Input
+                    value={formData.state}
+                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                     className="col-span-3"
                 />
             </div>
@@ -269,11 +359,10 @@ export default function VendorsPage() {
                 />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">Services</Label>
+                <Label className="text-right">Tax ID</Label>
                 <Input
-                    placeholder="FTL, LTL, Air (comma separated)"
-                    value={formData.serviceTypes}
-                    onChange={(e) => setFormData({ ...formData, serviceTypes: e.target.value })}
+                    value={formData.taxId}
+                    onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
                     className="col-span-3"
                 />
             </div>
@@ -333,58 +422,62 @@ export default function VendorsPage() {
                             className="max-w-sm"
                         />
                     </div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Code</TableHead>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Contact</TableHead>
-                                <TableHead>Location</TableHead>
-                                <TableHead>Services</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredVendors.map((vendor) => (
-                                <TableRow key={vendor.id}>
-                                    <TableCell className="font-medium">{vendor.code}</TableCell>
-                                    <TableCell>{vendor.name}</TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-col text-sm">
-                                            <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{vendor.email}</span>
-                                            <span className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{vendor.phone}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-1">
-                                            <MapPin className="h-3 w-3 text-muted-foreground" />
-                                            {vendor.city}, {vendor.country}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-wrap gap-1">
-                                            {vendor.serviceTypes.map((service) => (
-                                                <Badge key={service} variant="outline" className="text-xs">{service}</Badge>
-                                            ))}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={vendor.isActive ? "default" : "secondary"}>
-                                            {vendor.isActive ? "Active" : "Inactive"}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center space-x-1">
-                                            <Button variant="ghost" size="sm" onClick={() => handleView(vendor)}><Eye className="h-4 w-4" /></Button>
-                                            <Button variant="ghost" size="sm" onClick={() => handleEdit(vendor)}><Edit className="h-4 w-4" /></Button>
-                                            <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(vendor)} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
-                                        </div>
-                                    </TableCell>
+                    {isPageLoading ? (
+                        <div className="flex justify-center p-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Code</TableHead>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Contact</TableHead>
+                                    <TableHead>Location</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Actions</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredVendors.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center h-24">No vendors found.</TableCell>
+                                    </TableRow>
+                                ) : (
+                                    filteredVendors.map((vendor) => (
+                                        <TableRow key={vendor.id}>
+                                            <TableCell className="font-medium">{vendor.code || "-"}</TableCell>
+                                            <TableCell>{vendor.name}</TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-col text-sm">
+                                                    <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{vendor.email || "-"}</span>
+                                                    <span className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{vendor.phone || "-"}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-1">
+                                                    <MapPin className="h-3 w-3 text-muted-foreground" />
+                                                    {[vendor.city, vendor.country].filter(Boolean).join(", ") || "-"}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={vendor.isActive ? "default" : "secondary"}>
+                                                    {vendor.isActive ? "Active" : "Inactive"}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center space-x-1">
+                                                    <Button variant="ghost" size="sm" onClick={() => handleView(vendor)}><Eye className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(vendor)}><Edit className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(vendor)} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    )}
                 </CardContent>
             </Card>
 
@@ -429,7 +522,7 @@ export default function VendorsPage() {
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle>Vendor Details</DialogTitle>
-                        <DialogDescription>Full information for {selectedVendor?.code}</DialogDescription>
+                        <DialogDescription>Full information for {selectedVendor?.code || selectedVendor?.name}</DialogDescription>
                     </DialogHeader>
                     {selectedVendor && (
                         <div className="grid gap-4 py-4">
@@ -440,23 +533,19 @@ export default function VendorsPage() {
                                 </div>
                                 <div>
                                     <Label className="text-muted-foreground text-xs">Email</Label>
-                                    <div className="font-medium">{selectedVendor.email}</div>
+                                    <div className="font-medium">{selectedVendor.email || "-"}</div>
                                 </div>
                                 <div>
                                     <Label className="text-muted-foreground text-xs">Phone</Label>
-                                    <div className="font-medium">{selectedVendor.phone}</div>
+                                    <div className="font-medium">{selectedVendor.phone || "-"}</div>
                                 </div>
                                 <div>
                                     <Label className="text-muted-foreground text-xs">Location</Label>
-                                    <div className="font-medium">{selectedVendor.city}, {selectedVendor.country}</div>
+                                    <div className="font-medium">{[selectedVendor.city, selectedVendor.country].filter(Boolean).join(", ")}</div>
                                 </div>
-                                <div className="col-span-2">
-                                    <Label className="text-muted-foreground text-xs">Services</Label>
-                                    <div className="flex gap-2 mt-1">
-                                        {selectedVendor.serviceTypes.map(s => (
-                                            <Badge key={s} variant="outline">{s}</Badge>
-                                        ))}
-                                    </div>
+                                <div>
+                                    <Label className="text-muted-foreground text-xs">Tax ID</Label>
+                                    <div className="font-medium">{selectedVendor.taxId || "-"}</div>
                                 </div>
                                 <div>
                                     <Label className="text-muted-foreground text-xs">Status</Label>

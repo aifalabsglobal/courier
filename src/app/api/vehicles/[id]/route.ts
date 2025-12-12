@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 
 export async function PUT(
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { userId } = await auth();
@@ -12,6 +12,7 @@ export async function PUT(
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
+        const { id } = await params;
         const body = await req.json();
         const {
             registration,
@@ -36,26 +37,24 @@ export async function PUT(
             });
 
             if (!vehicleType) {
-                // For MVP, if update tries to set a new type that doesn't exist, create it?
-                // Or just fail. Let's reuse creation logic for robustness.
+                // Create new vehicle type
                 vehicleType = await db.vehicleType.create({
                     data: {
                         name: type,
                         code: type.toUpperCase().replace(/\s+/g, '_'),
-                        description: "Auto-generated",
-                        companyId: "default-company-id"
+                        description: "Auto-generated"
                     }
-                }).catch(() => null);
+                });
             }
             finalVehicleTypeId = vehicleType?.id;
         }
 
         // Prepare update data, excluding undefined fields
-        const updateData: any = {
+        const updateData: Record<string, unknown> = {
             registration,
             make,
             model,
-            status,
+            isActive: status === "Active",
             fitnessExpiry: fitnessExpiry ? new Date(fitnessExpiry) : undefined,
             insuranceExpiry: insuranceExpiry ? new Date(insuranceExpiry) : undefined,
         };
@@ -65,7 +64,7 @@ export async function PUT(
         }
 
         const vehicle = await db.vehicle.update({
-            where: { id: params.id },
+            where: { id },
             data: updateData
         });
 
@@ -78,7 +77,7 @@ export async function PUT(
 
 export async function DELETE(
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { userId } = await auth();
@@ -86,8 +85,9 @@ export async function DELETE(
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
+        const { id } = await params;
         const vehicle = await db.vehicle.delete({
-            where: { id: params.id }
+            where: { id }
         });
 
         return NextResponse.json(vehicle);

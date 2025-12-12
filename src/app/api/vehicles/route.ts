@@ -62,8 +62,8 @@ export async function POST(req: Request) {
             });
         }
 
-        // Handle Vehicle Type
-        let vehicleTypeId = null;
+        // Handle Vehicle Type - find or create one
+        let vehicleTypeId: string;
         if (type) {
             let vehicleType = await db.vehicleType.findFirst({
                 where: { name: type }
@@ -75,8 +75,7 @@ export async function POST(req: Request) {
                     data: {
                         name: type,
                         code: type.toUpperCase().replace(/\s+/g, '_'),
-                        description: "Auto-generated",
-                        companyId: company.id
+                        description: "Auto-generated"
                     }
                 });
             }
@@ -88,8 +87,7 @@ export async function POST(req: Request) {
                 defaultType = await db.vehicleType.create({
                     data: {
                         name: "General",
-                        code: "GENERAL",
-                        companyId: company.id
+                        code: "GENERAL"
                     }
                 });
             }
@@ -101,9 +99,9 @@ export async function POST(req: Request) {
                 registration,
                 make,
                 model,
-                status: status || "ACTIVE",
+                isActive: status === "Active",
                 companyId: company.id,
-                vehicleTypeId: vehicleTypeId,
+                vehicleTypeId,
                 capacityWeight: capacityWeight ? parseFloat(capacityWeight) : undefined,
                 capacityVolume: capacityVolume ? parseFloat(capacityVolume) : undefined,
                 fuelType: fuelType,

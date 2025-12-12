@@ -23,6 +23,7 @@ export default function HomePage() {
               <Link href="/rates" className="text-slate-300 hover:text-white transition">Rates</Link>
               <Link href="/about" className="text-slate-300 hover:text-white transition">About</Link>
               <Link href="/contact" className="text-slate-300 hover:text-white transition">Contact</Link>
+              <Link href="/docs" className="text-slate-300 hover:text-white transition">Docs</Link>
             </div>
             <div className="flex items-center gap-4">
               <SignedOut>

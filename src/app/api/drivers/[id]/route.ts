@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 
 export async function PUT(
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { userId } = await auth();
@@ -12,6 +12,7 @@ export async function PUT(
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
+        const { id } = await params;
         const body = await req.json();
         const {
             name,
@@ -23,7 +24,7 @@ export async function PUT(
         } = body;
 
         const driver = await db.driver.update({
-            where: { id: params.id },
+            where: { id },
             data: {
                 name,
                 email,
@@ -43,7 +44,7 @@ export async function PUT(
 
 export async function DELETE(
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { userId } = await auth();
@@ -51,8 +52,9 @@ export async function DELETE(
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
+        const { id } = await params;
         const driver = await db.driver.delete({
-            where: { id: params.id }
+            where: { id }
         });
 
         return NextResponse.json(driver);
@@ -61,3 +63,4 @@ export async function DELETE(
         return new NextResponse("Internal Error", { status: 500 });
     }
 }
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -33,62 +32,25 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Edit, Trash2, Eye, Star, User, Loader2, Calendar, Phone, Mail } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, Star, User, Loader2, Phone, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Driver {
   id: string;
-  code: string;
   name: string;
-  email: string;
-  phone: string;
-  licenseNo: string;
-  licenseExpiry: string;
-  rating: number;
+  email: string | null;
+  phone: string | null;
+  licenseNo: string | null;
+  licenseExpiry: string | null;
   isActive: boolean;
 }
 
-const mockDrivers: Driver[] = [
-  {
-    id: "1",
-    code: "DRV001",
-    name: "John Doe",
-    email: "john.doe@email.com",
-    phone: "+1-555-0101",
-    licenseNo: "DL123456",
-    licenseExpiry: "2024-12-31",
-    rating: 4.5,
-    isActive: true,
-  },
-  {
-    id: "2",
-    code: "DRV002",
-    name: "Jane Smith",
-    email: "jane.smith@email.com",
-    phone: "+1-555-0102",
-    licenseNo: "DL789012",
-    licenseExpiry: "2024-08-15",
-    rating: 4.8,
-    isActive: true,
-  },
-  {
-    id: "3",
-    code: "DRV003",
-    name: "Mike Johnson",
-    email: "mike.johnson@email.com",
-    phone: "+1-555-0103",
-    licenseNo: "DL345678",
-    licenseExpiry: "2024-03-01",
-    rating: 3.9,
-    isActive: false,
-  },
-];
-
 export default function DriversPage() {
   const { toast } = useToast();
-  const [drivers, setDrivers] = useState<Driver[]>(mockDrivers);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -100,62 +62,89 @@ export default function DriversPage() {
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
 
   const [formData, setFormData] = useState({
-    code: "",
     name: "",
     email: "",
     phone: "",
     licenseNo: "",
     licenseExpiry: "",
-    rating: 5.0,
-    isActive: true
   });
+
+  const fetchDrivers = async () => {
+    try {
+      const res = await fetch("/api/drivers");
+      if (!res.ok) throw new Error("Failed to fetch drivers");
+      const data = await res.json();
+      setDrivers(data);
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to load drivers", variant: "destructive" });
+    } finally {
+      setIsPageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDrivers();
+  }, []);
 
   const filteredDrivers = drivers.filter(
     (driver) =>
       driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      driver.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      driver.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      (driver.email && driver.email.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const resetForm = () => {
     setFormData({
-      code: `DRV${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
       name: "",
       email: "",
       phone: "",
       licenseNo: "",
-      licenseExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      rating: 5.0,
-      isActive: true
+      licenseExpiry: "",
     });
   };
 
   const handleCreate = async () => {
+    if (!formData.name) {
+      toast({ title: "Error", description: "Name is required", variant: "destructive" });
+      return;
+    }
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const res = await fetch("/api/drivers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          licenseNo: formData.licenseNo,
+          licenseExpiry: formData.licenseExpiry || null,
+          status: "Active"
+        }),
+      });
 
-    const newDriver: Driver = {
-      id: Date.now().toString(),
-      ...formData,
-    };
-    setDrivers([...drivers, newDriver]);
-    setIsCreateDialogOpen(false);
-    resetForm();
-    setIsLoading(false);
-    toast({ title: "Driver Added", description: `${formData.name} has been added to the system.` });
+      if (!res.ok) throw new Error("Failed to create driver");
+
+      await fetchDrivers();
+      setIsCreateDialogOpen(false);
+      resetForm();
+      toast({ title: "Driver Added", description: `${formData.name} has been added.` });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to create driver", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEdit = (driver: Driver) => {
     setSelectedDriver(driver);
     setFormData({
-      code: driver.code,
       name: driver.name,
-      email: driver.email,
-      phone: driver.phone,
-      licenseNo: driver.licenseNo,
-      licenseExpiry: driver.licenseExpiry,
-      rating: driver.rating,
-      isActive: driver.isActive
+      email: driver.email || "",
+      phone: driver.phone || "",
+      licenseNo: driver.licenseNo || "",
+      licenseExpiry: driver.licenseExpiry ? driver.licenseExpiry.split('T')[0] : "",
     });
     setIsEditDialogOpen(true);
   };
@@ -163,19 +152,32 @@ export default function DriversPage() {
   const handleUpdate = async () => {
     if (!selectedDriver) return;
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const res = await fetch(`/api/drivers/${selectedDriver.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          licenseNo: formData.licenseNo,
+          licenseExpiry: formData.licenseExpiry || null,
+          status: "Active"
+        }),
+      });
 
-    setDrivers(
-      drivers.map((d) =>
-        d.id === selectedDriver.id
-          ? { ...d, ...formData }
-          : d
-      )
-    );
-    setIsEditDialogOpen(false);
-    setSelectedDriver(null);
-    setIsLoading(false);
-    toast({ title: "Driver Updated", description: "Driver details have been updated." });
+      if (!res.ok) throw new Error("Failed to update driver");
+
+      await fetchDrivers();
+      setIsEditDialogOpen(false);
+      setSelectedDriver(null);
+      toast({ title: "Driver Updated", description: "Driver details saved." });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to update driver", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleView = (driver: Driver) => {
@@ -191,35 +193,37 @@ export default function DriversPage() {
   const handleDeleteConfirm = async () => {
     if (!selectedDriver) return;
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const res = await fetch(`/api/drivers/${selectedDriver.id}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Failed to delete driver");
 
-    setDrivers(drivers.filter((d) => d.id !== selectedDriver.id));
-    setIsDeleteDialogOpen(false);
-    setSelectedDriver(null);
-    setIsLoading(false);
-    toast({ title: "Driver Deleted", description: "Driver has been removed.", variant: "destructive" });
+      await fetchDrivers();
+      setIsDeleteDialogOpen(false);
+      setSelectedDriver(null);
+      toast({ title: "Driver Deleted", description: "Driver removed.", variant: "destructive" });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to delete driver", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const isExpiringSoon = (expiryDate: string) => {
+  const isExpiringSoon = (expiryDate: string | null) => {
+    if (!expiryDate) return false;
     const expiry = new Date(expiryDate);
     const today = new Date();
     const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return daysUntilExpiry <= 30 && daysUntilExpiry > 0;
   };
 
-  const isExpired = (expiryDate: string) => {
+  const isExpired = (expiryDate: string | null) => {
+    if (!expiryDate) return false;
     const expiry = new Date(expiryDate);
     const today = new Date();
     return expiry < today;
-  };
-
-  const renderRating = (rating: number) => {
-    return (
-      <div className="flex items-center">
-        <Star className="h-4 w-4 text-yellow-400 fill-current" />
-        <span className="ml-1 text-sm">{rating.toFixed(1)}</span>
-      </div>
-    );
   };
 
   const stats = {
@@ -230,14 +234,6 @@ export default function DriversPage() {
 
   const DriverForm = () => (
     <div className="grid gap-4 py-4">
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label className="text-right">Code</Label>
-        <Input
-          value={formData.code}
-          onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-          className="col-span-3"
-        />
-      </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Name</Label>
         <Input
@@ -277,18 +273,6 @@ export default function DriversPage() {
           type="date"
           value={formData.licenseExpiry}
           onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
-          className="col-span-3"
-        />
-      </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label className="text-right">Rating</Label>
-        <Input
-          type="number"
-          step="0.1"
-          min="0"
-          max="5"
-          value={formData.rating}
-          onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) })}
           className="col-span-3"
         />
       </div>
@@ -334,9 +318,7 @@ export default function DriversPage() {
       <Card>
         <CardHeader>
           <CardTitle>Driver List</CardTitle>
-          <CardDescription>
-            A list of all drivers in your system including their details and status.
-          </CardDescription>
+          <CardDescription>All drivers in your system.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center space-x-2 mb-4">
@@ -348,61 +330,69 @@ export default function DriversPage() {
               className="max-w-sm"
             />
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>License No</TableHead>
-                <TableHead>License Expiry</TableHead>
-                <TableHead>Rating</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredDrivers.map((driver) => (
-                <TableRow key={driver.id}>
-                  <TableCell className="font-medium">{driver.code}</TableCell>
-                  <TableCell>{driver.name}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col text-sm">
-                      <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{driver.email}</span>
-                      <span className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{driver.phone}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{driver.licenseNo}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        isExpired(driver.licenseExpiry)
-                          ? "destructive"
-                          : isExpiringSoon(driver.licenseExpiry)
-                            ? "secondary"
-                            : "outline"
-                      }
-                    >
-                      {driver.licenseExpiry}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{renderRating(driver.rating)}</TableCell>
-                  <TableCell>
-                    <Badge variant={driver.isActive ? "default" : "secondary"}>
-                      {driver.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-1">
-                      <Button variant="ghost" size="sm" onClick={() => handleView(driver)}><Eye className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(driver)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(driver)} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </TableCell>
+          {isPageLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>License No</TableHead>
+                  <TableHead>License Expiry</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredDrivers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center h-24">No drivers found.</TableCell>
+                  </TableRow>
+                ) : (
+                  filteredDrivers.map((driver) => (
+                    <TableRow key={driver.id}>
+                      <TableCell className="font-medium">{driver.name}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col text-sm">
+                          <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{driver.email || "-"}</span>
+                          <span className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{driver.phone || "-"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{driver.licenseNo || "-"}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            isExpired(driver.licenseExpiry)
+                              ? "destructive"
+                              : isExpiringSoon(driver.licenseExpiry)
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {driver.licenseExpiry ? new Date(driver.licenseExpiry).toLocaleDateString() : "-"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={driver.isActive ? "default" : "secondary"}>
+                          {driver.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleView(driver)}><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(driver)}><Edit className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(driver)} className="text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -447,7 +437,7 @@ export default function DriversPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Driver Details</DialogTitle>
-            <DialogDescription>Full information for {selectedDriver?.code}</DialogDescription>
+            <DialogDescription>Full information for {selectedDriver?.name}</DialogDescription>
           </DialogHeader>
           {selectedDriver && (
             <div className="grid gap-4 py-4">
@@ -458,24 +448,20 @@ export default function DriversPage() {
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Email</Label>
-                  <div className="font-medium">{selectedDriver.email}</div>
+                  <div className="font-medium">{selectedDriver.email || "-"}</div>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Phone</Label>
-                  <div className="font-medium">{selectedDriver.phone}</div>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">Rating</Label>
-                  <div className="font-medium flex items-center gap-1">{selectedDriver.rating} <Star className="h-3 w-3 fill-current text-yellow-500" /></div>
+                  <div className="font-medium">{selectedDriver.phone || "-"}</div>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">License No</Label>
-                  <div className="font-medium">{selectedDriver.licenseNo}</div>
+                  <div className="font-medium">{selectedDriver.licenseNo || "-"}</div>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">License Expiry</Label>
                   <div className={`font-medium ${isExpired(selectedDriver.licenseExpiry) ? "text-red-500" : ""}`}>
-                    {selectedDriver.licenseExpiry}
+                    {selectedDriver.licenseExpiry ? new Date(selectedDriver.licenseExpiry).toLocaleDateString() : "-"}
                   </div>
                 </div>
                 <div>
